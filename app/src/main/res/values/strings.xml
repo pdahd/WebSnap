@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 应用名称 -->
+    <string name="app_name">WebSnap</string>
+
+    <!-- 地址栏 -->
+    <string name="hint_enter_url">输入网址</string>
+    <string name="button_go">GO</string>
+
+    <!-- 截图按钮 -->
+    <string name="button_capture">📷 截取长图</string>
+    <string name="button_capturing">截图中…</string>
+
+    <!-- Toast 提示消息 -->
+    <string name="toast_url_empty">请输入网址</string>
+    <string name="toast_page_not_loaded">请先加载网页</string>
+    <string name="toast_capture_success">截图已保存到相册</string>
+    <string name="toast_capture_failed">截图失败，请重试</string>
+    <string name="toast_page_too_long">页面过长，已截取前 %1$d 像素</string>
+    <string name="toast_memory_insufficient">内存不足，无法截取此页面</string>
+    <string name="toast_loading">正在加载…</string>
+
+    <!-- WebView 错误 -->
+    <string name="error_page_title">加载失败</string>
+    <string name="error_page_message">无法加载此页面\n%1$s</string>
+</resources>
+
