@@ -1,0 +1,72 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  
+  # 允许手动触发构建
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ============================================
+      # 步骤 1: 检出代码
+      # ============================================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ============================================
+      # 步骤 2: 设置 JDK 17
+      # ============================================
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # ============================================
+      # 步骤 3: 设置 Gradle（无需 wrapper）
+      # 此 Action 会自动下载指定版本的 Gradle
+      # ============================================
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.2'
+
+      # ============================================
+      # 步骤 4: 生成 Gradle Wrapper（供后续步骤使用）
+      # ============================================
+      - name: Generate Gradle Wrapper
+        run: gradle wrapper --gradle-version 8.2
+
+      # ============================================
+      # 步骤 5: 构建 Debug APK
+      # ============================================
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      # ============================================
+      # 步骤 6: 上传 APK 产物
+      # ============================================
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebSnap-debug-${{ github.sha }}
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      # ============================================
+      # 步骤 7: 显示构建产物信息（调试用）
+      # ============================================
+      - name: Display APK info
+        run: |
+          echo "✅ Build completed successfully!"
+          echo "📦 APK files:"
+          ls -lh app/build/outputs/apk/debug/
+          
