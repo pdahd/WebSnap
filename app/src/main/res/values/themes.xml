@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.WebSnap" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <!-- 主色调 -->
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryDark">@color/primary_dark</item>
+        <item name="colorAccent">@color/accent</item>
+        
+        <!-- 状态栏颜色 -->
+        <item name="android:statusBarColor">@color/status_bar</item>
+        
+        <!-- 按钮样式 -->
+        <item name="materialButtonStyle">@style/Widget.WebSnap.Button</item>
+        
+        <!-- 进度条颜色 -->
+        <item name="colorControlActivated">@color/progress_color</item>
+    </style>
+
+    <!-- 自定义按钮样式 -->
+    <style name="Widget.WebSnap.Button" parent="Widget.MaterialComponents.Button">
+        <item name="backgroundTint">@color/primary</item>
+        <item name="cornerRadius">8dp</item>
+        <item name="android:textColor">#FFFFFF</item>
+    </style>
+</resources>
