@@ -6,6 +6,7 @@
     <!-- 地址栏 -->
     <string name="hint_enter_url">输入网址</string>
     <string name="button_go">GO</string>
+    <string name="checkbox_pc_mode">PC</string>
 
     <!-- 截图按钮 -->
     <string name="button_capture">📷 截取长图</string>
@@ -20,8 +21,14 @@
     <string name="toast_memory_insufficient">内存不足，无法截取此页面</string>
     <string name="toast_loading">正在加载…</string>
 
+    <!-- PC 模式 -->
+    <string name="toast_pc_mode_on">已切换到桌面模式</string>
+    <string name="toast_pc_mode_off">已切换到移动模式</string>
+
+    <!-- URL Scheme 拦截 -->
+    <string name="toast_scheme_blocked">已拦截应用跳转</string>
+
     <!-- WebView 错误 -->
     <string name="error_page_title">加载失败</string>
     <string name="error_page_message">无法加载此页面\n%1$s</string>
 </resources>
-
