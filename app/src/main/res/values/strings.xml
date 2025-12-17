@@ -8,9 +8,15 @@
     <string name="button_go">GO</string>
     <string name="checkbox_pc_mode">PC</string>
 
-    <!-- 截图按钮 -->
+    <!-- 底部按钮 -->
+    <string name="button_back">&lt;</string>
+    <string name="button_forward">&gt;</string>
     <string name="button_capture">📷 截取长图</string>
     <string name="button_capturing">截图中…</string>
+
+    <!-- 无障碍描述 -->
+    <string name="content_desc_back">后退</string>
+    <string name="content_desc_forward">前进</string>
 
     <!-- Toast 提示消息 -->
     <string name="toast_url_empty">请输入网址</string>
@@ -22,7 +28,7 @@
     <string name="toast_loading">正在加载…</string>
 
     <!-- PC 模式 -->
-    <string name="toast_pc_mode_on">已切换到桌面模式</string>
+    <string name="toast_pc_mode_on">已切换到桌面模式，可双指缩放</string>
     <string name="toast_pc_mode_off">已切换到移动模式</string>
 
     <!-- URL Scheme 拦截 -->
