@@ -34,7 +34,7 @@ jobs:
       # 此 Action 会自动下载指定版本的 Gradle
       # ============================================
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.2'
 
