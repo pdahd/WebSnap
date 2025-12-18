@@ -1,14 +1,19 @@
 package com.example.websnap
 
 import android.annotation.SuppressLint
+import android.app.TimePickerDialog
+import android.content.ComponentName
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.IBinder
 import android.provider.MediaStore
 import android.view.KeyEvent
 import android.view.View
@@ -20,18 +25,22 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.websnap.databinding.ActivityMainBinding
 import com.example.websnap.databinding.BottomSheetBookmarksBinding
+import com.example.websnap.databinding.BottomSheetRefreshBinding
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import java.io.IOException
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
     private lateinit var binding: ActivityMainBinding
 
@@ -39,25 +48,17 @@ class MainActivity : AppCompatActivity() {
     // 常量配置
     // ═══════════════════════════════════════════════════════════════
 
-    /** 最大截图高度限制（像素），防止 OOM */
     private val maxCaptureHeight = 20000
-
-    /** PC 模式模拟的桌面视口宽度 */
     private val desktopViewportWidth = 1024
 
-    /** 桌面端 UserAgent */
     private val desktopUserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
         "AppleWebKit/537.36 (KHTML, like Gecko) " +
         "Chrome/120.0.0.0 Safari/537.36"
 
-    /** 允许 WebView 直接加载的 URL Scheme 白名单 */
     private val webViewSchemes = setOf("http", "https", "about", "data", "javascript")
-
-    /** 允许通过系统 Intent 打开的 Scheme */
     private val systemSchemes = setOf("tel", "mailto", "sms")
 
-    /** 桌面模式 JavaScript 脚本 */
     private val desktopModeScript: String
         get() = """
             (function() {
@@ -116,36 +117,48 @@ class MainActivity : AppCompatActivity() {
     // 状态变量
     // ═══════════════════════════════════════════════════════════════
 
-    /** 页面是否已加载完成 */
     private var isPageLoaded = false
-
-    /** 原始移动端 UserAgent */
     private var mobileUserAgent: String = ""
-
-    /** 当前是否为 PC 模式 */
     private var isPcMode = false
-
-    /** 当前页面是否已应用桌面模式 */
     private var desktopModeAppliedForCurrentPage = false
-
-    /** 当前正在加载的 URL */
     private var currentLoadingUrl: String? = null
-
-    /** 当前页面标题 */
     private var currentPageTitle: String = ""
 
     // ═══════════════════════════════════════════════════════════════
     // 书签相关
     // ═══════════════════════════════════════════════════════════════
 
-    /** 书签管理器 */
     private lateinit var bookmarkManager: BookmarkManager
-
-    /** 书签列表弹窗 */
     private var bookmarkBottomSheet: BottomSheetDialog? = null
 
-    /** 书签列表适配器 */
-    private var bookmarkAdapter: BookmarkAdapter? = null
+    // ═══════════════════════════════════════════════════════════════
+    // 刷新服务相关
+    // ═══════════════════════════════════════════════════════════════
+
+    private var refreshService: RefreshService? = null
+    private var isServiceBound = false
+    private var refreshBottomSheet: BottomSheetDialog? = null
+
+    /** 用户在弹窗中选择的定时时间 */
+    private var selectedScheduledTime: Calendar? = null
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            val binder = service as RefreshService.RefreshBinder
+            refreshService = binder.getService()
+            refreshService?.setCallback(this@MainActivity)
+            isServiceBound = true
+
+            // 恢复 UI 状态
+            updateRefreshButtonState()
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            refreshService?.setCallback(null)
+            refreshService = null
+            isServiceBound = false
+        }
+    }
 
     // ═══════════════════════════════════════════════════════════════
     // 生命周期
@@ -154,24 +167,62 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 【关键】必须在任何 WebView 实例化之前调用！
         WebView.enableSlowWholeDocumentDraw()
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // 初始化书签管理器
         bookmarkManager = BookmarkManager.getInstance(this)
 
         setupWebView()
         setupListeners()
         updateNavigationButtons()
         updateBookmarkButton()
+        updatePcModeButton()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // 绑定服务
+        Intent(this, RefreshService::class.java).also { intent ->
+            bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // 注意：不在这里解绑，让服务继续运行
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // 如果没有活动任务，恢复 WebView
+        if (refreshService?.hasActiveTask() != true) {
+            binding.webView.onResume()
+            binding.webView.resumeTimers()
+        }
+        updateRefreshButtonState()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // 如果没有活动任务，暂停 WebView
+        if (refreshService?.hasActiveTask() != true) {
+            binding.webView.onPause()
+            binding.webView.pauseTimers()
+        }
     }
 
     override fun onDestroy() {
+        // 解绑服务
+        if (isServiceBound) {
+            refreshService?.setCallback(null)
+            unbindService(serviceConnection)
+            isServiceBound = false
+        }
+
         bookmarkBottomSheet?.dismiss()
-        bookmarkBottomSheet = null
+        refreshBottomSheet?.dismiss()
 
         binding.webView.apply {
             stopLoading()
@@ -186,17 +237,20 @@ class MainActivity : AppCompatActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        // 先关闭 BottomSheet
-        if (bookmarkBottomSheet?.isShowing == true) {
-            bookmarkBottomSheet?.dismiss()
-            return
-        }
-
-        if (binding.webView.canGoBack()) {
-            binding.webView.goBack()
-        } else {
-            @Suppress("DEPRECATION")
-            super.onBackPressed()
+        when {
+            refreshBottomSheet?.isShowing == true -> {
+                refreshBottomSheet?.dismiss()
+            }
+            bookmarkBottomSheet?.isShowing == true -> {
+                bookmarkBottomSheet?.dismiss()
+            }
+            binding.webView.canGoBack() -> {
+                binding.webView.goBack()
+            }
+            else -> {
+                @Suppress("DEPRECATION")
+                super.onBackPressed()
+            }
         }
     }
 
@@ -345,7 +399,6 @@ class MainActivity : AppCompatActivity() {
 
             override fun onReceivedTitle(view: WebView?, title: String?) {
                 super.onReceivedTitle(view, title)
-                // 保存当前页面标题（用于添加书签）
                 currentPageTitle = title ?: ""
             }
         }
@@ -375,11 +428,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // PC 模式切换
-        binding.checkBoxPcMode.setOnCheckedChangeListener { _, isChecked ->
-            togglePcMode(isChecked)
-        }
-
         // 书签按钮：单击切换收藏状态
         binding.buttonBookmark.setOnClickListener {
             toggleBookmark()
@@ -391,9 +439,9 @@ class MainActivity : AppCompatActivity() {
             true
         }
 
-        // 截图按钮
-        binding.buttonCapture.setOnClickListener {
-            performCapture()
+        // PC 模式按钮
+        binding.buttonPcMode.setOnClickListener {
+            togglePcMode()
         }
 
         // 后退按钮
@@ -409,113 +457,22 @@ class MainActivity : AppCompatActivity() {
                 binding.webView.goForward()
             }
         }
-    }
 
-    // ═══════════════════════════════════════════════════════════════
-    // 书签功能
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * 更新书签按钮显示状态（☆ 或 ★）
-     */
-    private fun updateBookmarkButton() {
-        val currentUrl = binding.webView.url
-
-        val isBookmarked = if (!currentUrl.isNullOrBlank() && currentUrl != "about:blank") {
-            bookmarkManager.contains(currentUrl)
-        } else {
-            false
+        // 刷新按钮：单击刷新
+        binding.buttonRefresh.setOnClickListener {
+            performRefresh()
         }
 
-        binding.buttonBookmark.text = if (isBookmarked) {
-            getString(R.string.button_bookmark_filled)
-        } else {
-            getString(R.string.button_bookmark_empty)
-        }
-    }
-
-    /**
-     * 切换当前页面的书签状态
-     */
-    private fun toggleBookmark() {
-        val currentUrl = binding.webView.url
-
-        // 检查是否有有效页面
-        if (currentUrl.isNullOrBlank() || currentUrl == "about:blank") {
-            showToast(getString(R.string.toast_bookmark_need_page))
-            return
+        // 刷新按钮：长按显示设置
+        binding.buttonRefresh.setOnLongClickListener {
+            showRefreshSheet()
+            true
         }
 
-        if (bookmarkManager.contains(currentUrl)) {
-            // 已收藏 → 移除
-            bookmarkManager.remove(currentUrl)
-            showToast(getString(R.string.toast_bookmark_removed))
-        } else {
-            // 未收藏 → 添加
-            val title = currentPageTitle.ifBlank { currentUrl }
-            val bookmark = Bookmark(title = title, url = currentUrl)
-            bookmarkManager.add(bookmark)
-            showToast(getString(R.string.toast_bookmark_added))
+        // 截图按钮
+        binding.buttonCapture.setOnClickListener {
+            performCapture()
         }
-
-        updateBookmarkButton()
-    }
-
-    /**
-     * 显示书签列表 BottomSheet
-     */
-    private fun showBookmarkSheet() {
-        // 创建 BottomSheet
-        val bottomSheet = BottomSheetDialog(this)
-        val sheetBinding = BottomSheetBookmarksBinding.inflate(layoutInflater)
-        bottomSheet.setContentView(sheetBinding.root)
-
-        // 设置适配器
-        val adapter = BookmarkAdapter(
-            onItemClick = { bookmark ->
-                // 点击书签项 → 加载 URL
-                bottomSheet.dismiss()
-                binding.webView.loadUrl(bookmark.url)
-            },
-            onDeleteClick = { bookmark, position ->
-                // 点击删除按钮 → 删除书签
-                bookmarkManager.removeAt(position)
-                (sheetBinding.recyclerViewBookmarks.adapter as? BookmarkAdapter)?.removeAt(position)
-                showToast(getString(R.string.toast_bookmark_deleted, bookmark.title))
-
-                // 如果删除后列表为空，显示空状态
-                if (bookmarkManager.isEmpty()) {
-                    sheetBinding.recyclerViewBookmarks.visibility = View.GONE
-                    sheetBinding.emptyStateContainer.visibility = View.VISIBLE
-                }
-
-                // 更新顶部书签按钮状态
-                updateBookmarkButton()
-            }
-        )
-
-        sheetBinding.recyclerViewBookmarks.apply {
-            layoutManager = LinearLayoutManager(this@MainActivity)
-            this.adapter = adapter
-        }
-
-        // 加载数据
-        val bookmarks = bookmarkManager.getAll()
-        if (bookmarks.isEmpty()) {
-            sheetBinding.recyclerViewBookmarks.visibility = View.GONE
-            sheetBinding.emptyStateContainer.visibility = View.VISIBLE
-        } else {
-            sheetBinding.recyclerViewBookmarks.visibility = View.VISIBLE
-            sheetBinding.emptyStateContainer.visibility = View.GONE
-            adapter.submitList(bookmarks)
-        }
-
-        // 保存引用
-        bookmarkAdapter = adapter
-        bookmarkBottomSheet = bottomSheet
-
-        // 显示
-        bottomSheet.show()
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -539,16 +496,105 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // PC 模式切换
+    // 书签功能
     // ═══════════════════════════════════════════════════════════════
 
-    private fun togglePcMode(enableDesktopMode: Boolean) {
-        val webSettings = binding.webView.settings
-        isPcMode = enableDesktopMode
+    private fun updateBookmarkButton() {
+        val currentUrl = binding.webView.url
 
+        val isBookmarked = if (!currentUrl.isNullOrBlank() && currentUrl != "about:blank") {
+            bookmarkManager.contains(currentUrl)
+        } else {
+            false
+        }
+
+        binding.buttonBookmark.text = if (isBookmarked) {
+            getString(R.string.button_bookmark_filled)
+        } else {
+            getString(R.string.button_bookmark_empty)
+        }
+    }
+
+    private fun toggleBookmark() {
+        val currentUrl = binding.webView.url
+
+        if (currentUrl.isNullOrBlank() || currentUrl == "about:blank") {
+            showToast(getString(R.string.toast_bookmark_need_page))
+            return
+        }
+
+        if (bookmarkManager.contains(currentUrl)) {
+            bookmarkManager.remove(currentUrl)
+            showToast(getString(R.string.toast_bookmark_removed))
+        } else {
+            val title = currentPageTitle.ifBlank { currentUrl }
+            val bookmark = Bookmark(title = title, url = currentUrl)
+            bookmarkManager.add(bookmark)
+            showToast(getString(R.string.toast_bookmark_added))
+        }
+
+        updateBookmarkButton()
+    }
+
+    private fun showBookmarkSheet() {
+        val bottomSheet = BottomSheetDialog(this)
+        val sheetBinding = BottomSheetBookmarksBinding.inflate(layoutInflater)
+        bottomSheet.setContentView(sheetBinding.root)
+
+        val adapter = BookmarkAdapter(
+            onItemClick = { bookmark ->
+                bottomSheet.dismiss()
+                binding.webView.loadUrl(bookmark.url)
+            },
+            onDeleteClick = { bookmark, position ->
+                bookmarkManager.removeAt(position)
+                (sheetBinding.recyclerViewBookmarks.adapter as? BookmarkAdapter)?.removeAt(position)
+                showToast(getString(R.string.toast_bookmark_deleted, bookmark.title))
+
+                if (bookmarkManager.isEmpty()) {
+                    sheetBinding.recyclerViewBookmarks.visibility = View.GONE
+                    sheetBinding.emptyStateContainer.visibility = View.VISIBLE
+                }
+
+                updateBookmarkButton()
+            }
+        )
+
+        sheetBinding.recyclerViewBookmarks.apply {
+            layoutManager = LinearLayoutManager(this@MainActivity)
+            this.adapter = adapter
+        }
+
+        val bookmarks = bookmarkManager.getAll()
+        if (bookmarks.isEmpty()) {
+            sheetBinding.recyclerViewBookmarks.visibility = View.GONE
+            sheetBinding.emptyStateContainer.visibility = View.VISIBLE
+        } else {
+            sheetBinding.recyclerViewBookmarks.visibility = View.VISIBLE
+            sheetBinding.emptyStateContainer.visibility = View.GONE
+            adapter.submitList(bookmarks)
+        }
+
+        bookmarkBottomSheet = bottomSheet
+        bottomSheet.show()
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // PC 模式
+    // ═══════════════════════════════════════════════════════════════
+
+    private fun updatePcModeButton() {
+        binding.buttonPcMode.isSelected = isPcMode
+    }
+
+    private fun togglePcMode() {
+        isPcMode = !isPcMode
+        updatePcModeButton()
+
+        val webSettings = binding.webView.settings
         desktopModeAppliedForCurrentPage = false
 
-        if (enableDesktopMode) {
+        if (isPcMode) {
             webSettings.userAgentString = desktopUserAgent
             webSettings.useWideViewPort = true
             webSettings.loadWithOverviewMode = false
@@ -565,6 +611,347 @@ class MainActivity : AppCompatActivity() {
         val currentUrl = binding.webView.url
         if (!currentUrl.isNullOrBlank() && currentUrl != "about:blank") {
             binding.webView.reload()
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 刷新功能
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * 执行刷新（单击刷新按钮）
+     */
+    private fun performRefresh() {
+        val currentUrl = binding.webView.url
+
+        if (currentUrl.isNullOrBlank() || currentUrl == "about:blank") {
+            showToast(getString(R.string.toast_refresh_need_page))
+            return
+        }
+
+        binding.webView.reload()
+    }
+
+    /**
+     * 更新刷新按钮状态
+     */
+    private fun updateRefreshButtonState() {
+        val service = refreshService ?: return
+
+        when {
+            service.hasActiveTask() -> {
+                val task = service.getCurrentTask()
+                val remaining = service.getRemainingSeconds()
+
+                when (task) {
+                    is RefreshTask.Interval -> {
+                        binding.buttonRefresh.text = getString(
+                            R.string.button_refresh_countdown,
+                            formatSeconds(remaining)
+                        )
+                    }
+                    is RefreshTask.Scheduled -> {
+                        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                        binding.buttonRefresh.text = getString(
+                            R.string.button_refresh_scheduled,
+                            timeFormat.format(Date(task.targetTimeMillis))
+                        )
+                    }
+                    null -> {
+                        binding.buttonRefresh.text = getString(R.string.button_refresh_default)
+                    }
+                }
+            }
+            else -> {
+                binding.buttonRefresh.text = getString(R.string.button_refresh_default)
+            }
+        }
+    }
+
+    /**
+     * 显示刷新设置 BottomSheet
+     */
+    private fun showRefreshSheet() {
+        val bottomSheet = BottomSheetDialog(this)
+        val sheetBinding = BottomSheetRefreshBinding.inflate(layoutInflater)
+        bottomSheet.setContentView(sheetBinding.root)
+
+        // 设置间隔选项 Spinner
+        val intervalOptions = resources.getStringArray(R.array.interval_options)
+        val intervalValues = resources.getIntArray(R.array.interval_values)
+        val spinnerAdapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            intervalOptions
+        ).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        sheetBinding.spinnerInterval.adapter = spinnerAdapter
+        sheetBinding.spinnerInterval.setSelection(4) // 默认选择 5 分钟
+
+        // 重置选中时间
+        selectedScheduledTime = null
+
+        // 时间选择按钮
+        sheetBinding.buttonPickTime.setOnClickListener {
+            showTimePicker(sheetBinding)
+        }
+
+        // RadioButton 互斥逻辑
+        sheetBinding.radioInterval.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                sheetBinding.radioScheduled.isChecked = false
+                sheetBinding.containerInterval.alpha = 1f
+                sheetBinding.containerScheduled.alpha = 0.5f
+            }
+        }
+
+        sheetBinding.radioScheduled.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                sheetBinding.radioInterval.isChecked = false
+                sheetBinding.containerInterval.alpha = 0.5f
+                sheetBinding.containerScheduled.alpha = 1f
+            }
+        }
+
+        // 默认选中间隔刷新
+        sheetBinding.radioInterval.isChecked = true
+
+        // 显示当前任务状态
+        val service = refreshService
+        if (service != null && service.hasActiveTask()) {
+            sheetBinding.containerCurrentTask.visibility = View.VISIBLE
+            sheetBinding.buttonCancelTask.visibility = View.VISIBLE
+
+            val task = service.getCurrentTask()
+            val remaining = service.getRemainingSeconds()
+
+            when (task) {
+                is RefreshTask.Interval -> {
+                    val intervalText = getIntervalDisplayText(task.intervalSeconds)
+                    sheetBinding.textViewCurrentTask.text = getString(
+                        R.string.refresh_current_task_interval,
+                        intervalText,
+                        formatSeconds(remaining)
+                    )
+                }
+                is RefreshTask.Scheduled -> {
+                    val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                    sheetBinding.textViewCurrentTask.text = getString(
+                        R.string.refresh_current_task_scheduled,
+                        timeFormat.format(Date(task.targetTimeMillis))
+                    )
+                }
+                null -> {
+                    sheetBinding.containerCurrentTask.visibility = View.GONE
+                    sheetBinding.buttonCancelTask.visibility = View.GONE
+                }
+            }
+        } else {
+            sheetBinding.containerCurrentTask.visibility = View.GONE
+            sheetBinding.buttonCancelTask.visibility = View.GONE
+        }
+
+        // 取消任务按钮
+        sheetBinding.buttonCancelTask.setOnClickListener {
+            refreshService?.stopTask()
+            stopRefreshService()
+            showToast(getString(R.string.toast_refresh_cancelled))
+            bottomSheet.dismiss()
+        }
+
+        // 确认按钮
+        sheetBinding.buttonConfirm.setOnClickListener {
+            when {
+                sheetBinding.radioInterval.isChecked -> {
+                    val selectedPosition = sheetBinding.spinnerInterval.selectedItemPosition
+                    val seconds = intervalValues[selectedPosition].toLong()
+                    startIntervalRefresh(seconds)
+                    showToast(getString(R.string.toast_refresh_started))
+                    bottomSheet.dismiss()
+                }
+                sheetBinding.radioScheduled.isChecked -> {
+                    val time = selectedScheduledTime
+                    if (time == null) {
+                        showToast(getString(R.string.toast_refresh_select_time))
+                    } else {
+                        startScheduledRefresh(time.timeInMillis)
+                        showToast(getString(R.string.toast_refresh_started))
+                        bottomSheet.dismiss()
+                    }
+                }
+                else -> {
+                    showToast(getString(R.string.toast_refresh_select_mode))
+                }
+            }
+        }
+
+        refreshBottomSheet = bottomSheet
+        bottomSheet.show()
+    }
+
+    /**
+     * 显示时间选择器
+     */
+    private fun showTimePicker(sheetBinding: BottomSheetRefreshBinding) {
+        val calendar = Calendar.getInstance()
+
+        // 自定义 TimePickerDialog 来支持秒
+        val hour = calendar.get(Calendar.HOUR_OF_DAY)
+        val minute = calendar.get(Calendar.MINUTE)
+
+        TimePickerDialog(
+            this,
+            { _, selectedHour, selectedMinute ->
+                // 弹出秒选择
+                showSecondPicker(sheetBinding, selectedHour, selectedMinute)
+            },
+            hour,
+            minute,
+            true
+        ).show()
+    }
+
+    /**
+     * 显示秒选择器（简化为固定选项）
+     */
+    private fun showSecondPicker(
+        sheetBinding: BottomSheetRefreshBinding,
+        hour: Int,
+        minute: Int
+    ) {
+        val seconds = arrayOf("00", "15", "30", "45")
+        val secondValues = intArrayOf(0, 15, 30, 45)
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("选择秒数")
+            .setItems(seconds) { _, which ->
+                val second = secondValues[which]
+
+                // 构建目标时间
+                val calendar = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, hour)
+                    set(Calendar.MINUTE, minute)
+                    set(Calendar.SECOND, second)
+                    set(Calendar.MILLISECOND, 0)
+                }
+
+                selectedScheduledTime = calendar
+
+                // 更新按钮显示
+                val timeStr = String.format(
+                    Locale.getDefault(),
+                    "%02d:%02d:%02d",
+                    hour, minute, second
+                )
+                sheetBinding.buttonPickTime.text = timeStr
+            }
+            .show()
+    }
+
+    /**
+     * 启动间隔刷新
+     */
+    private fun startIntervalRefresh(intervalSeconds: Long) {
+        val intent = Intent(this, RefreshService::class.java).apply {
+            action = RefreshService.ACTION_START_TASK
+            putExtra(RefreshService.EXTRA_TASK_TYPE, "interval")
+            putExtra(RefreshService.EXTRA_INTERVAL_SECONDS, intervalSeconds)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
+    /**
+     * 启动定时刷新
+     */
+    private fun startScheduledRefresh(targetTimeMillis: Long) {
+        val intent = Intent(this, RefreshService::class.java).apply {
+            action = RefreshService.ACTION_START_TASK
+            putExtra(RefreshService.EXTRA_TASK_TYPE, "scheduled")
+            putExtra(RefreshService.EXTRA_TARGET_TIME, targetTimeMillis)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
+    /**
+     * 停止刷新服务
+     */
+    private fun stopRefreshService() {
+        val intent = Intent(this, RefreshService::class.java).apply {
+            action = RefreshService.ACTION_STOP_TASK
+        }
+        startService(intent)
+        updateRefreshButtonState()
+    }
+
+    private fun getIntervalDisplayText(seconds: Long): String {
+        return when {
+            seconds < 60 -> "${seconds} 秒"
+            seconds < 3600 -> "${seconds / 60} 分钟"
+            else -> "${seconds / 3600} 小时"
+        }
+    }
+
+    private fun formatSeconds(totalSeconds: Long): String {
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+
+        return if (hours > 0) {
+            String.format(Locale.getDefault(), "%02d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // RefreshService.RefreshCallback 实现
+    // ═══════════════════════════════════════════════════════════════
+
+    override fun onTaskStarted(task: RefreshTask) {
+        runOnUiThread {
+            updateRefreshButtonState()
+        }
+    }
+
+    override fun onCountdownTick(remainingSeconds: Long) {
+        runOnUiThread {
+            val task = refreshService?.getCurrentTask()
+            when (task) {
+                is RefreshTask.Interval -> {
+                    binding.buttonRefresh.text = getString(
+                        R.string.button_refresh_countdown,
+                        formatSeconds(remainingSeconds)
+                    )
+                }
+                is RefreshTask.Scheduled -> {
+                    // 定时模式显示目标时间，不变
+                }
+                null -> {}
+            }
+        }
+    }
+
+    override fun onRefreshTriggered() {
+        runOnUiThread {
+            binding.buttonRefresh.text = getString(R.string.button_refreshing)
+            binding.webView.reload()
+        }
+    }
+
+    override fun onTaskCancelled() {
+        runOnUiThread {
+            binding.buttonRefresh.text = getString(R.string.button_refresh_default)
         }
     }
 
@@ -587,9 +974,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         hideKeyboard()
-
         desktopModeAppliedForCurrentPage = false
-
         binding.webView.loadUrl(url)
     }
 
@@ -604,7 +989,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.buttonCapture.isEnabled = false
-        binding.buttonCapture.text = getString(R.string.button_capturing)
 
         binding.webView.post {
             try {
@@ -633,7 +1017,6 @@ class MainActivity : AppCompatActivity() {
 
             } finally {
                 binding.buttonCapture.isEnabled = true
-                binding.buttonCapture.text = getString(R.string.button_capture)
             }
         }
     }
