@@ -22,7 +22,10 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.websnap.databinding.ActivityMainBinding
+import com.example.websnap.databinding.BottomSheetBookmarksBinding
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -54,16 +57,12 @@ class MainActivity : AppCompatActivity() {
     /** 允许通过系统 Intent 打开的 Scheme */
     private val systemSchemes = setOf("tel", "mailto", "sms")
 
-    /**
-     * 桌面模式 JavaScript 脚本
-     * 功能：欺骗网页的视口宽度检测，强制使用桌面布局
-     */
+    /** 桌面模式 JavaScript 脚本 */
     private val desktopModeScript: String
         get() = """
             (function() {
                 var desktopWidth = $desktopViewportWidth;
                 
-                // === 1. 覆盖 JavaScript 的屏幕宽度属性 ===
                 try {
                     Object.defineProperty(window, 'innerWidth', {
                         get: function() { return desktopWidth; },
@@ -85,11 +84,8 @@ class MainActivity : AppCompatActivity() {
                         get: function() { return desktopWidth; },
                         configurable: true
                     });
-                } catch(e) {
-                    console.log('WebSnap: Failed to override screen properties');
-                }
+                } catch(e) {}
                 
-                // === 2. 修改 viewport meta 标签 ===
                 function setDesktopViewport() {
                     var viewport = document.querySelector('meta[name="viewport"]');
                     var content = 'width=' + desktopWidth + ', initial-scale=0.67, minimum-scale=0.1, maximum-scale=10';
@@ -104,20 +100,15 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 
-                // === 3. 执行 viewport 修改 ===
                 setDesktopViewport();
                 
-                // DOM 加载完成后再执行一次（确保生效）
                 if (document.readyState === 'loading') {
                     document.addEventListener('DOMContentLoaded', setDesktopViewport);
                 }
                 
-                // === 4. 触发 resize 事件，让 JS 响应式代码重新执行 ===
                 try {
                     window.dispatchEvent(new Event('resize'));
                 } catch(e) {}
-                
-                console.log('WebSnap: Desktop mode script injected, viewport=' + desktopWidth);
             })();
         """.trimIndent()
 
@@ -134,11 +125,27 @@ class MainActivity : AppCompatActivity() {
     /** 当前是否为 PC 模式 */
     private var isPcMode = false
 
-    /** 当前页面是否已应用桌面模式（防止重复 reload） */
+    /** 当前页面是否已应用桌面模式 */
     private var desktopModeAppliedForCurrentPage = false
 
-    /** 当前正在加载的 URL（用于检测页面变化） */
+    /** 当前正在加载的 URL */
     private var currentLoadingUrl: String? = null
+
+    /** 当前页面标题 */
+    private var currentPageTitle: String = ""
+
+    // ═══════════════════════════════════════════════════════════════
+    // 书签相关
+    // ═══════════════════════════════════════════════════════════════
+
+    /** 书签管理器 */
+    private lateinit var bookmarkManager: BookmarkManager
+
+    /** 书签列表弹窗 */
+    private var bookmarkBottomSheet: BottomSheetDialog? = null
+
+    /** 书签列表适配器 */
+    private var bookmarkAdapter: BookmarkAdapter? = null
 
     // ═══════════════════════════════════════════════════════════════
     // 生命周期
@@ -153,12 +160,19 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // 初始化书签管理器
+        bookmarkManager = BookmarkManager.getInstance(this)
+
         setupWebView()
         setupListeners()
         updateNavigationButtons()
+        updateBookmarkButton()
     }
 
     override fun onDestroy() {
+        bookmarkBottomSheet?.dismiss()
+        bookmarkBottomSheet = null
+
         binding.webView.apply {
             stopLoading()
             clearHistory()
@@ -172,6 +186,12 @@ class MainActivity : AppCompatActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
+        // 先关闭 BottomSheet
+        if (bookmarkBottomSheet?.isShowing == true) {
+            bookmarkBottomSheet?.dismiss()
+            return
+        }
+
         if (binding.webView.canGoBack()) {
             binding.webView.goBack()
         } else {
@@ -220,7 +240,6 @@ class MainActivity : AppCompatActivity() {
                 binding.progressBar.progress = 0
                 binding.buttonCapture.isEnabled = false
 
-                // 检测是否是新页面
                 if (url != currentLoadingUrl) {
                     currentLoadingUrl = url
                     desktopModeAppliedForCurrentPage = false
@@ -232,8 +251,8 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 updateNavigationButtons()
+                updateBookmarkButton()
 
-                // PC 模式：在页面开始加载时就尝试注入脚本
                 if (isPcMode && view != null) {
                     view.evaluateJavascript(desktopModeScript, null)
                 }
@@ -245,8 +264,8 @@ class MainActivity : AppCompatActivity() {
                 binding.progressBar.visibility = View.GONE
                 binding.buttonCapture.isEnabled = true
                 updateNavigationButtons()
+                updateBookmarkButton()
 
-                // PC 模式：页面加载完成后的处理
                 if (isPcMode && view != null) {
                     handleDesktopModePageFinished(view)
                 }
@@ -275,7 +294,6 @@ class MainActivity : AppCompatActivity() {
                 val url = request?.url ?: return false
                 val scheme = url.scheme?.lowercase() ?: return false
 
-                // URL 变化时重置桌面模式标志
                 desktopModeAppliedForCurrentPage = false
 
                 return when {
@@ -295,21 +313,16 @@ class MainActivity : AppCompatActivity() {
             ) {
                 super.doUpdateVisitedHistory(view, url, isReload)
                 updateNavigationButtons()
+                updateBookmarkButton()
             }
         }
     }
 
-    /**
-     * PC 模式下页面加载完成的处理逻辑
-     */
     private fun handleDesktopModePageFinished(view: WebView) {
-        // 注入桌面模式脚本
         view.evaluateJavascript(desktopModeScript) { _ ->
-            // 如果是首次加载此页面的桌面模式，执行一次 reload 让 viewport 生效
             if (!desktopModeAppliedForCurrentPage) {
                 desktopModeAppliedForCurrentPage = true
-                
-                // 延迟 reload，让脚本有时间执行
+
                 view.postDelayed({
                     if (isPcMode && isPageLoaded) {
                         view.reload()
@@ -332,6 +345,8 @@ class MainActivity : AppCompatActivity() {
 
             override fun onReceivedTitle(view: WebView?, title: String?) {
                 super.onReceivedTitle(view, title)
+                // 保存当前页面标题（用于添加书签）
+                currentPageTitle = title ?: ""
             }
         }
     }
@@ -341,10 +356,12 @@ class MainActivity : AppCompatActivity() {
     // ═══════════════════════════════════════════════════════════════
 
     private fun setupListeners() {
+        // GO 按钮
         binding.buttonGo.setOnClickListener {
             loadUrl()
         }
 
+        // 输入框回车键
         binding.editTextUrl.setOnEditorActionListener { _, actionId, event ->
             val isEnterKey = event?.keyCode == KeyEvent.KEYCODE_ENTER
                     && event.action == KeyEvent.ACTION_DOWN
@@ -358,25 +375,147 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // PC 模式切换
         binding.checkBoxPcMode.setOnCheckedChangeListener { _, isChecked ->
             togglePcMode(isChecked)
         }
 
+        // 书签按钮：单击切换收藏状态
+        binding.buttonBookmark.setOnClickListener {
+            toggleBookmark()
+        }
+
+        // 书签按钮：长按显示书签列表
+        binding.buttonBookmark.setOnLongClickListener {
+            showBookmarkSheet()
+            true
+        }
+
+        // 截图按钮
         binding.buttonCapture.setOnClickListener {
             performCapture()
         }
 
+        // 后退按钮
         binding.buttonBack.setOnClickListener {
             if (binding.webView.canGoBack()) {
                 binding.webView.goBack()
             }
         }
 
+        // 前进按钮
         binding.buttonForward.setOnClickListener {
             if (binding.webView.canGoForward()) {
                 binding.webView.goForward()
             }
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 书签功能
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * 更新书签按钮显示状态（☆ 或 ★）
+     */
+    private fun updateBookmarkButton() {
+        val currentUrl = binding.webView.url
+
+        val isBookmarked = if (!currentUrl.isNullOrBlank() && currentUrl != "about:blank") {
+            bookmarkManager.contains(currentUrl)
+        } else {
+            false
+        }
+
+        binding.buttonBookmark.text = if (isBookmarked) {
+            getString(R.string.button_bookmark_filled)
+        } else {
+            getString(R.string.button_bookmark_empty)
+        }
+    }
+
+    /**
+     * 切换当前页面的书签状态
+     */
+    private fun toggleBookmark() {
+        val currentUrl = binding.webView.url
+
+        // 检查是否有有效页面
+        if (currentUrl.isNullOrBlank() || currentUrl == "about:blank") {
+            showToast(getString(R.string.toast_bookmark_need_page))
+            return
+        }
+
+        if (bookmarkManager.contains(currentUrl)) {
+            // 已收藏 → 移除
+            bookmarkManager.remove(currentUrl)
+            showToast(getString(R.string.toast_bookmark_removed))
+        } else {
+            // 未收藏 → 添加
+            val title = currentPageTitle.ifBlank { currentUrl }
+            val bookmark = Bookmark(title = title, url = currentUrl)
+            bookmarkManager.add(bookmark)
+            showToast(getString(R.string.toast_bookmark_added))
+        }
+
+        updateBookmarkButton()
+    }
+
+    /**
+     * 显示书签列表 BottomSheet
+     */
+    private fun showBookmarkSheet() {
+        // 创建 BottomSheet
+        val bottomSheet = BottomSheetDialog(this)
+        val sheetBinding = BottomSheetBookmarksBinding.inflate(layoutInflater)
+        bottomSheet.setContentView(sheetBinding.root)
+
+        // 设置适配器
+        val adapter = BookmarkAdapter(
+            onItemClick = { bookmark ->
+                // 点击书签项 → 加载 URL
+                bottomSheet.dismiss()
+                binding.webView.loadUrl(bookmark.url)
+            },
+            onDeleteClick = { bookmark, position ->
+                // 点击删除按钮 → 删除书签
+                bookmarkManager.removeAt(position)
+                (sheetBinding.recyclerViewBookmarks.adapter as? BookmarkAdapter)?.removeAt(position)
+                showToast(getString(R.string.toast_bookmark_deleted, bookmark.title))
+
+                // 如果删除后列表为空，显示空状态
+                if (bookmarkManager.isEmpty()) {
+                    sheetBinding.recyclerViewBookmarks.visibility = View.GONE
+                    sheetBinding.emptyStateContainer.visibility = View.VISIBLE
+                }
+
+                // 更新顶部书签按钮状态
+                updateBookmarkButton()
+            }
+        )
+
+        sheetBinding.recyclerViewBookmarks.apply {
+            layoutManager = LinearLayoutManager(this@MainActivity)
+            this.adapter = adapter
+        }
+
+        // 加载数据
+        val bookmarks = bookmarkManager.getAll()
+        if (bookmarks.isEmpty()) {
+            sheetBinding.recyclerViewBookmarks.visibility = View.GONE
+            sheetBinding.emptyStateContainer.visibility = View.VISIBLE
+        } else {
+            sheetBinding.recyclerViewBookmarks.visibility = View.VISIBLE
+            sheetBinding.emptyStateContainer.visibility = View.GONE
+            adapter.submitList(bookmarks)
+        }
+
+        // 保存引用
+        bookmarkAdapter = adapter
+        bookmarkBottomSheet = bottomSheet
+
+        // 显示
+        bottomSheet.show()
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -407,26 +546,22 @@ class MainActivity : AppCompatActivity() {
         val webSettings = binding.webView.settings
         isPcMode = enableDesktopMode
 
-        // 重置桌面模式应用标志，允许重新应用
         desktopModeAppliedForCurrentPage = false
 
         if (enableDesktopMode) {
-            // === 切换到桌面模式 ===
             webSettings.userAgentString = desktopUserAgent
             webSettings.useWideViewPort = true
             webSettings.loadWithOverviewMode = false
-            
+
             showToast(getString(R.string.toast_pc_mode_on))
         } else {
-            // === 切换回移动模式 ===
             webSettings.userAgentString = mobileUserAgent
             webSettings.useWideViewPort = true
             webSettings.loadWithOverviewMode = true
-            
+
             showToast(getString(R.string.toast_pc_mode_off))
         }
 
-        // 如果已加载页面，刷新以应用新设置
         val currentUrl = binding.webView.url
         if (!currentUrl.isNullOrBlank() && currentUrl != "about:blank") {
             binding.webView.reload()
@@ -452,10 +587,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         hideKeyboard()
-        
-        // 重置桌面模式标志
+
         desktopModeAppliedForCurrentPage = false
-        
+
         binding.webView.loadUrl(url)
     }
 
