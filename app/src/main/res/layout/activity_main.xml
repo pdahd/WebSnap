@@ -8,7 +8,9 @@
     android:fitsSystemWindows="true"
     tools:context=".MainActivity">
 
-    <!-- 顶部地址栏区域 -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 顶部地址栏区域                                               -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
     <LinearLayout
         android:id="@+id/urlBarContainer"
         android:layout_width="0dp"
@@ -42,11 +44,12 @@
         <!-- GO 按钮 -->
         <Button
             android:id="@+id/buttonGo"
-            android:layout_width="wrap_content"
+            android:layout_width="56dp"
             android:layout_height="48dp"
             android:layout_marginStart="8dp"
-            android:minWidth="64dp"
+            android:padding="0dp"
             android:text="@string/button_go"
+            android:textSize="14sp"
             android:textAllCaps="false" />
 
         <!-- 书签按钮 -->
@@ -54,34 +57,34 @@
             android:id="@+id/buttonBookmark"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="6dp"
             android:padding="0dp"
             android:text="@string/button_bookmark_empty"
             android:textSize="18sp"
             android:textAllCaps="false"
+            android:background="@drawable/icon_button_background"
             android:contentDescription="@string/content_desc_bookmark"
             tools:text="☆" />
 
-        <!-- PC 模式复选框 -->
-        <CheckBox
-            android:id="@+id/checkBoxPcMode"
-            android:layout_width="wrap_content"
+        <!-- PC 模式按钮 -->
+        <Button
+            android:id="@+id/buttonPcMode"
+            android:layout_width="48dp"
             android:layout_height="48dp"
-            android:layout_marginStart="8dp"
-            android:text="@string/checkbox_pc_mode"
-            android:textColor="@color/text_primary"
-            android:textSize="14sp"
-            android:buttonTint="@color/primary"
-            android:gravity="center"
-            android:paddingStart="4dp"
-            android:paddingEnd="8dp"
-            android:background="@drawable/checkbox_background"
-            android:minWidth="56dp"
-            tools:checked="false" />
+            android:layout_marginStart="6dp"
+            android:padding="0dp"
+            android:text="@string/button_pc_mode"
+            android:textSize="16sp"
+            android:textAllCaps="false"
+            android:background="@drawable/pc_button_background"
+            android:contentDescription="@string/content_desc_pc_mode"
+            tools:text="💻" />
 
     </LinearLayout>
 
-    <!-- 加载进度条 -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 加载进度条                                                   -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
     <ProgressBar
         android:id="@+id/progressBar"
         style="@style/Widget.AppCompat.ProgressBar.Horizontal"
@@ -97,7 +100,9 @@
         tools:visibility="visible"
         tools:progress="50" />
 
-    <!-- WebView 主体区域 -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- WebView 主体区域                                             -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
     <WebView
         android:id="@+id/webView"
         android:layout_width="0dp"
@@ -107,14 +112,17 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- 底部按钮区域：后退 | 截图 | 前进 -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 底部按钮区域：后退 | 智能刷新 | 截图 | 前进                   -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
     <LinearLayout
         android:id="@+id/bottomButtonContainer"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="12dp"
+        android:padding="10dp"
         android:gravity="center_vertical"
+        android:background="@color/bottom_bar_background"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
@@ -122,7 +130,7 @@
         <!-- 后退按钮 -->
         <Button
             android:id="@+id/buttonBack"
-            android:layout_width="56dp"
+            android:layout_width="52dp"
             android:layout_height="48dp"
             android:text="@string/button_back"
             android:textSize="20sp"
@@ -132,22 +140,34 @@
             android:contentDescription="@string/content_desc_back"
             tools:enabled="true" />
 
-        <!-- 截图按钮（主按钮，占据剩余空间） -->
+        <!-- 智能刷新按钮（主角，占据剩余空间） -->
         <Button
-            android:id="@+id/buttonCapture"
+            android:id="@+id/buttonRefresh"
             android:layout_width="0dp"
             android:layout_height="48dp"
             android:layout_weight="1"
-            android:layout_marginHorizontal="12dp"
-            android:text="@string/button_capture"
-            android:textSize="16sp"
-            android:textAllCaps="false" />
+            android:layout_marginHorizontal="8dp"
+            android:text="@string/button_refresh_default"
+            android:textSize="14sp"
+            android:textAllCaps="false"
+            android:contentDescription="@string/content_desc_refresh" />
+
+        <!-- 截图按钮 -->
+        <Button
+            android:id="@+id/buttonCapture"
+            android:layout_width="52dp"
+            android:layout_height="48dp"
+            android:text="@string/button_capture_icon"
+            android:textSize="20sp"
+            android:textAllCaps="false"
+            android:contentDescription="@string/content_desc_capture" />
 
         <!-- 前进按钮 -->
         <Button
             android:id="@+id/buttonForward"
-            android:layout_width="56dp"
+            android:layout_width="52dp"
             android:layout_height="48dp"
+            android:layout_marginStart="8dp"
             android:text="@string/button_forward"
             android:textSize="20sp"
             android:textStyle="bold"
