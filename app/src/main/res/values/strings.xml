@@ -90,6 +90,17 @@
     <string name="interval_10_min">10 分钟</string>
     <string name="interval_30_min">30 分钟</string>
 
+    <!-- 自定义间隔对话框 -->
+    <string name="refresh_custom_interval">自定义…</string>
+    <string name="dialog_custom_interval_title">自定义刷新间隔</string>
+    <string name="dialog_custom_interval_hint">请输入刷新间隔时间</string>
+    <string name="dialog_label_hours">小时</string>
+    <string name="dialog_label_minutes">分钟</string>
+    <string name="dialog_label_seconds">秒</string>
+    <string name="dialog_button_cancel">取消</string>
+    <string name="dialog_button_ok">确定</string>
+    <string name="toast_invalid_interval">请输入有效的时间间隔</string>
+
     <!-- WebView 错误 -->
     <string name="error_page_title">加载失败</string>
     <string name="error_page_message">无法加载此页面\n%1$s</string>
