@@ -36,7 +36,6 @@ class BookmarkAdapter(
         if (position >= 0 && position < bookmarks.size) {
             bookmarks.removeAt(position)
             notifyItemRemoved(position)
-            // 更新后续项的位置
             notifyItemRangeChanged(position, bookmarks.size - position)
         }
     }
@@ -66,7 +65,8 @@ class BookmarkAdapter(
         init {
             // 点击整行 → 打开书签
             binding.root.setOnClickListener {
-                val position = bindingAdapterPosition
+                @Suppress("DEPRECATION")
+                val position = adapterPosition
                 if (position != RecyclerView.NO_POSITION) {
                     onItemClick(bookmarks[position])
                 }
@@ -74,7 +74,8 @@ class BookmarkAdapter(
 
             // 点击删除按钮
             binding.buttonDelete.setOnClickListener {
-                val position = bindingAdapterPosition
+                @Suppress("DEPRECATION")
+                val position = adapterPosition
                 if (position != RecyclerView.NO_POSITION) {
                     onDeleteClick(bookmarks[position], position)
                 }
@@ -88,7 +89,7 @@ class BookmarkAdapter(
     }
 
     /**
-     * DiffUtil 回调，用于高效更新列表
+     * DiffUtil 回调
      */
     private class BookmarkDiffCallback(
         private val oldList: List<Bookmark>,
@@ -100,7 +101,6 @@ class BookmarkAdapter(
         override fun getNewListSize(): Int = newList.size
 
         override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            // 以 URL 作为唯一标识
             return oldList[oldItemPosition].url == newList[newItemPosition].url
         }
 
