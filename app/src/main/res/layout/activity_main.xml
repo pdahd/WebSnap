@@ -49,6 +49,19 @@
             android:text="@string/button_go"
             android:textAllCaps="false" />
 
+        <!-- 书签按钮 -->
+        <Button
+            android:id="@+id/buttonBookmark"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:padding="0dp"
+            android:text="@string/button_bookmark_empty"
+            android:textSize="18sp"
+            android:textAllCaps="false"
+            android:contentDescription="@string/content_desc_bookmark"
+            tools:text="☆" />
+
         <!-- PC 模式复选框 -->
         <CheckBox
             android:id="@+id/checkBoxPcMode"
