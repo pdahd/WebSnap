@@ -8,6 +8,10 @@
     <string name="button_go">GO</string>
     <string name="checkbox_pc_mode">PC</string>
 
+    <!-- 书签按钮 -->
+    <string name="button_bookmark_empty">☆</string>
+    <string name="button_bookmark_filled">★</string>
+
     <!-- 底部按钮 -->
     <string name="button_back">&lt;</string>
     <string name="button_forward">&gt;</string>
@@ -17,6 +21,8 @@
     <!-- 无障碍描述 -->
     <string name="content_desc_back">后退</string>
     <string name="content_desc_forward">前进</string>
+    <string name="content_desc_bookmark">书签</string>
+    <string name="content_desc_delete_bookmark">删除书签</string>
 
     <!-- Toast 提示消息 -->
     <string name="toast_url_empty">请输入网址</string>
@@ -33,6 +39,20 @@
 
     <!-- URL Scheme 拦截 -->
     <string name="toast_scheme_blocked">已拦截应用跳转</string>
+
+    <!-- 书签功能 -->
+    <string name="toast_bookmark_added">已添加书签</string>
+    <string name="toast_bookmark_removed">已移除书签</string>
+    <string name="toast_bookmark_deleted">已删除「%1$s」</string>
+    <string name="toast_bookmark_exists">已在书签中</string>
+    <string name="toast_bookmark_need_page">请先加载网页</string>
+
+    <!-- 书签列表 (BottomSheet) -->
+    <string name="bookmark_sheet_title">📑 我的书签</string>
+    <string name="bookmark_empty_icon">📭</string>
+    <string name="bookmark_empty_hint">暂无书签\n点击 ☆ 添加当前页面</string>
+    <string name="bookmark_item_icon">🔖</string>
+    <string name="bookmark_delete_icon">✕</string>
 
     <!-- WebView 错误 -->
     <string name="error_page_title">加载失败</string>
