@@ -1,5 +1,6 @@
 package com.example.websnap
 
+import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Intent
 import android.graphics.Bitmap
@@ -38,8 +39,8 @@ class MainActivity : AppCompatActivity() {
     /** 最大截图高度限制（像素），防止 OOM */
     private val maxCaptureHeight = 20000
 
-    /** PC 模式下的初始缩放比例（67%） */
-    private val pcModeInitialScale = 67
+    /** PC 模式模拟的桌面视口宽度 */
+    private val desktopViewportWidth = 1024
 
     /** 桌面端 UserAgent */
     private val desktopUserAgent =
@@ -53,6 +54,73 @@ class MainActivity : AppCompatActivity() {
     /** 允许通过系统 Intent 打开的 Scheme */
     private val systemSchemes = setOf("tel", "mailto", "sms")
 
+    /**
+     * 桌面模式 JavaScript 脚本
+     * 功能：欺骗网页的视口宽度检测，强制使用桌面布局
+     */
+    private val desktopModeScript: String
+        get() = """
+            (function() {
+                var desktopWidth = $desktopViewportWidth;
+                
+                // === 1. 覆盖 JavaScript 的屏幕宽度属性 ===
+                try {
+                    Object.defineProperty(window, 'innerWidth', {
+                        get: function() { return desktopWidth; },
+                        configurable: true
+                    });
+                    Object.defineProperty(window, 'outerWidth', {
+                        get: function() { return desktopWidth; },
+                        configurable: true
+                    });
+                    Object.defineProperty(document.documentElement, 'clientWidth', {
+                        get: function() { return desktopWidth; },
+                        configurable: true
+                    });
+                    Object.defineProperty(screen, 'width', {
+                        get: function() { return desktopWidth; },
+                        configurable: true
+                    });
+                    Object.defineProperty(screen, 'availWidth', {
+                        get: function() { return desktopWidth; },
+                        configurable: true
+                    });
+                } catch(e) {
+                    console.log('WebSnap: Failed to override screen properties');
+                }
+                
+                // === 2. 修改 viewport meta 标签 ===
+                function setDesktopViewport() {
+                    var viewport = document.querySelector('meta[name="viewport"]');
+                    var content = 'width=' + desktopWidth + ', initial-scale=0.67, minimum-scale=0.1, maximum-scale=10';
+                    
+                    if (viewport) {
+                        viewport.setAttribute('content', content);
+                    } else if (document.head) {
+                        viewport = document.createElement('meta');
+                        viewport.name = 'viewport';
+                        viewport.content = content;
+                        document.head.insertBefore(viewport, document.head.firstChild);
+                    }
+                }
+                
+                // === 3. 执行 viewport 修改 ===
+                setDesktopViewport();
+                
+                // DOM 加载完成后再执行一次（确保生效）
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', setDesktopViewport);
+                }
+                
+                // === 4. 触发 resize 事件，让 JS 响应式代码重新执行 ===
+                try {
+                    window.dispatchEvent(new Event('resize'));
+                } catch(e) {}
+                
+                console.log('WebSnap: Desktop mode script injected, viewport=' + desktopWidth);
+            })();
+        """.trimIndent()
+
     // ═══════════════════════════════════════════════════════════════
     // 状态变量
     // ═══════════════════════════════════════════════════════════════
@@ -60,11 +128,17 @@ class MainActivity : AppCompatActivity() {
     /** 页面是否已加载完成 */
     private var isPageLoaded = false
 
-    /** 原始移动端 UserAgent（在 setupWebView 时获取） */
+    /** 原始移动端 UserAgent */
     private var mobileUserAgent: String = ""
 
     /** 当前是否为 PC 模式 */
     private var isPcMode = false
+
+    /** 当前页面是否已应用桌面模式（防止重复 reload） */
+    private var desktopModeAppliedForCurrentPage = false
+
+    /** 当前正在加载的 URL（用于检测页面变化） */
+    private var currentLoadingUrl: String? = null
 
     // ═══════════════════════════════════════════════════════════════
     // 生命周期
@@ -74,8 +148,6 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         // 【关键】必须在任何 WebView 实例化之前调用！
-        // 这会让 WebView 保留整个文档的绘制数据，而不仅仅是可见区域。
-        // 否则 draw(canvas) 只会绘制当前可见部分，其余区域为空白。
         WebView.enableSlowWholeDocumentDraw()
 
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -87,7 +159,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        // 无痕浏览：清理所有 WebView 数据
         binding.webView.apply {
             stopLoading()
             clearHistory()
@@ -113,43 +184,28 @@ class MainActivity : AppCompatActivity() {
     // WebView 配置
     // ═══════════════════════════════════════════════════════════════
 
+    @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
         binding.webView.apply {
-            // 保存原始 UserAgent
             mobileUserAgent = settings.userAgentString
 
             settings.apply {
-                // 启用 JavaScript
                 javaScriptEnabled = true
-                // 启用 DOM Storage
                 domStorageEnabled = true
-                // 允许数据库存储
                 databaseEnabled = true
-                // 使用宽视口
                 useWideViewPort = true
-                // 页面自适应屏幕（移动模式默认开启）
                 loadWithOverviewMode = true
-                // 启用缩放
                 setSupportZoom(true)
                 builtInZoomControls = true
                 displayZoomControls = false
-                // 允许混合内容
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                // 缓存模式
                 cacheMode = WebSettings.LOAD_DEFAULT
-                // 允许文件访问
                 allowFileAccess = true
-                // 清理 UserAgent 中的 wv 标识
                 userAgentString = userAgentString.replace("; wv", "")
             }
 
-            // 更新保存的 mobileUserAgent（已清理）
             mobileUserAgent = settings.userAgentString
-
-            // 设置 WebViewClient
             webViewClient = createWebViewClient()
-
-            // 设置 WebChromeClient
             webChromeClient = createWebChromeClient()
         }
     }
@@ -164,14 +220,23 @@ class MainActivity : AppCompatActivity() {
                 binding.progressBar.progress = 0
                 binding.buttonCapture.isEnabled = false
 
-                // 同步地址栏显示
+                // 检测是否是新页面
+                if (url != currentLoadingUrl) {
+                    currentLoadingUrl = url
+                    desktopModeAppliedForCurrentPage = false
+                }
+
                 url?.let {
                     binding.editTextUrl.setText(it)
                     binding.editTextUrl.setSelection(it.length)
                 }
 
-                // 更新导航按钮状态
                 updateNavigationButtons()
+
+                // PC 模式：在页面开始加载时就尝试注入脚本
+                if (isPcMode && view != null) {
+                    view.evaluateJavascript(desktopModeScript, null)
+                }
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
@@ -179,9 +244,12 @@ class MainActivity : AppCompatActivity() {
                 isPageLoaded = true
                 binding.progressBar.visibility = View.GONE
                 binding.buttonCapture.isEnabled = true
-
-                // 更新导航按钮状态
                 updateNavigationButtons()
+
+                // PC 模式：页面加载完成后的处理
+                if (isPcMode && view != null) {
+                    handleDesktopModePageFinished(view)
+                }
             }
 
             override fun onReceivedError(
@@ -200,12 +268,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            /**
-             * URL Scheme 白名单拦截
-             * - http/https: WebView 加载
-             * - tel/mailto/sms: 系统 Intent
-             * - 其他: 静默拦截（防止 ERR_UNKNOWN_URL_SCHEME）
-             */
             override fun shouldOverrideUrlLoading(
                 view: WebView?,
                 request: WebResourceRequest?
@@ -213,19 +275,19 @@ class MainActivity : AppCompatActivity() {
                 val url = request?.url ?: return false
                 val scheme = url.scheme?.lowercase() ?: return false
 
+                // URL 变化时重置桌面模式标志
+                desktopModeAppliedForCurrentPage = false
+
                 return when {
                     scheme in webViewSchemes -> false
                     scheme in systemSchemes -> {
                         handleSystemScheme(url)
                         true
                     }
-                    else -> true // 静默拦截
+                    else -> true
                 }
             }
 
-            /**
-             * 历史记录变化时更新导航按钮
-             */
             override fun doUpdateVisitedHistory(
                 view: WebView?,
                 url: String?,
@@ -233,6 +295,26 @@ class MainActivity : AppCompatActivity() {
             ) {
                 super.doUpdateVisitedHistory(view, url, isReload)
                 updateNavigationButtons()
+            }
+        }
+    }
+
+    /**
+     * PC 模式下页面加载完成的处理逻辑
+     */
+    private fun handleDesktopModePageFinished(view: WebView) {
+        // 注入桌面模式脚本
+        view.evaluateJavascript(desktopModeScript) { _ ->
+            // 如果是首次加载此页面的桌面模式，执行一次 reload 让 viewport 生效
+            if (!desktopModeAppliedForCurrentPage) {
+                desktopModeAppliedForCurrentPage = true
+                
+                // 延迟 reload，让脚本有时间执行
+                view.postDelayed({
+                    if (isPcMode && isPageLoaded) {
+                        view.reload()
+                    }
+                }, 300)
             }
         }
     }
@@ -250,7 +332,6 @@ class MainActivity : AppCompatActivity() {
 
             override fun onReceivedTitle(view: WebView?, title: String?) {
                 super.onReceivedTitle(view, title)
-                // 可选：更新标题
             }
         }
     }
@@ -260,12 +341,10 @@ class MainActivity : AppCompatActivity() {
     // ═══════════════════════════════════════════════════════════════
 
     private fun setupListeners() {
-        // GO 按钮
         binding.buttonGo.setOnClickListener {
             loadUrl()
         }
 
-        // 输入框回车键
         binding.editTextUrl.setOnEditorActionListener { _, actionId, event ->
             val isEnterKey = event?.keyCode == KeyEvent.KEYCODE_ENTER
                     && event.action == KeyEvent.ACTION_DOWN
@@ -279,24 +358,20 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // PC 模式切换
         binding.checkBoxPcMode.setOnCheckedChangeListener { _, isChecked ->
             togglePcMode(isChecked)
         }
 
-        // 截图按钮
         binding.buttonCapture.setOnClickListener {
             performCapture()
         }
 
-        // 后退按钮
         binding.buttonBack.setOnClickListener {
             if (binding.webView.canGoBack()) {
                 binding.webView.goBack()
             }
         }
 
-        // 前进按钮
         binding.buttonForward.setOnClickListener {
             if (binding.webView.canGoForward()) {
                 binding.webView.goForward()
@@ -308,17 +383,11 @@ class MainActivity : AppCompatActivity() {
     // 导航功能
     // ═══════════════════════════════════════════════════════════════
 
-    /**
-     * 更新后退/前进按钮的启用状态
-     */
     private fun updateNavigationButtons() {
         binding.buttonBack.isEnabled = binding.webView.canGoBack()
         binding.buttonForward.isEnabled = binding.webView.canGoForward()
     }
 
-    /**
-     * 处理系统级 URL Scheme
-     */
     private fun handleSystemScheme(url: Uri) {
         try {
             val intent = Intent(Intent.ACTION_VIEW, url).apply {
@@ -334,30 +403,26 @@ class MainActivity : AppCompatActivity() {
     // PC 模式切换
     // ═══════════════════════════════════════════════════════════════
 
-    /**
-     * 切换 PC 桌面模式
-     * - PC 模式：使用桌面 UA + 关闭 overview + 67% 缩放
-     * - 移动模式：使用移动 UA + 开启 overview + 默认缩放
-     */
     private fun togglePcMode(enableDesktopMode: Boolean) {
         val webSettings = binding.webView.settings
         isPcMode = enableDesktopMode
 
-        if (enableDesktopMode) {
-            // 切换到桌面模式
-            webSettings.userAgentString = desktopUserAgent
-            webSettings.loadWithOverviewMode = false
-            webSettings.useWideViewPort = true
-            binding.webView.setInitialScale(pcModeInitialScale)
+        // 重置桌面模式应用标志，允许重新应用
+        desktopModeAppliedForCurrentPage = false
 
+        if (enableDesktopMode) {
+            // === 切换到桌面模式 ===
+            webSettings.userAgentString = desktopUserAgent
+            webSettings.useWideViewPort = true
+            webSettings.loadWithOverviewMode = false
+            
             showToast(getString(R.string.toast_pc_mode_on))
         } else {
-            // 切换回移动模式
+            // === 切换回移动模式 ===
             webSettings.userAgentString = mobileUserAgent
-            webSettings.loadWithOverviewMode = true
             webSettings.useWideViewPort = true
-            binding.webView.setInitialScale(0) // 0 = 使用默认
-
+            webSettings.loadWithOverviewMode = true
+            
             showToast(getString(R.string.toast_pc_mode_off))
         }
 
@@ -380,7 +445,6 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // 自动补全协议
         val url = when {
             inputUrl.startsWith("http://") || inputUrl.startsWith("https://") -> inputUrl
             inputUrl.startsWith("www.") -> "https://$inputUrl"
@@ -388,12 +452,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         hideKeyboard()
-
-        // 如果是 PC 模式，确保缩放设置正确
-        if (isPcMode) {
-            binding.webView.setInitialScale(pcModeInitialScale)
-        }
-
+        
+        // 重置桌面模式标志
+        desktopModeAppliedForCurrentPage = false
+        
         binding.webView.loadUrl(url)
     }
 
@@ -407,7 +469,6 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // 禁用按钮，防止重复点击
         binding.buttonCapture.isEnabled = false
         binding.buttonCapture.text = getString(R.string.button_capturing)
 
@@ -443,13 +504,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * 将 WebView 内容绘制到 Bitmap
-     */
     private fun captureWebViewToBitmap(): Bitmap? {
         val webView = binding.webView
 
-        // 步骤1：计算实际内容尺寸
         @Suppress("DEPRECATION")
         val scale = webView.scale
         val contentWidth = webView.width
@@ -459,14 +516,12 @@ class MainActivity : AppCompatActivity() {
             return null
         }
 
-        // 步骤2：高度限制
         var wasTruncated = false
         if (contentHeight > maxCaptureHeight) {
             contentHeight = maxCaptureHeight
             wasTruncated = true
         }
 
-        // 步骤3：内存检查
         val requiredMemory = contentWidth.toLong() * contentHeight.toLong() * 4L
         val runtime = Runtime.getRuntime()
         val freeMemory = runtime.maxMemory() - runtime.totalMemory() + runtime.freeMemory()
@@ -476,13 +531,11 @@ class MainActivity : AppCompatActivity() {
             return null
         }
 
-        // 步骤4：临时切换到软件渲染
         val originalLayerType = webView.layerType
         webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
 
         val bitmap: Bitmap?
         try {
-            // 步骤5：创建 Bitmap 并绘制
             bitmap = Bitmap.createBitmap(
                 contentWidth,
                 contentHeight,
@@ -493,7 +546,6 @@ class MainActivity : AppCompatActivity() {
             webView.draw(canvas)
 
         } finally {
-            // 步骤6：恢复渲染类型
             webView.setLayerType(originalLayerType, null)
         }
 
