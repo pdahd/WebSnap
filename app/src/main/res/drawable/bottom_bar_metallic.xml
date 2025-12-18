@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 第一层：顶部阴影/分隔线 -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="linear"
+                android:angle="270"
+                android:startColor="#CCCCCC"
+                android:endColor="@android:color/transparent"
+                android:centerY="0.1" />
+        </shape>
+    </item>
+
+    <!-- 第二层：金属渐变主体 -->
+    <item android:top="2dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="linear"
+                android:angle="270"
+                android:startColor="#FAFAFA"
+                android:centerColor="#F5F5F5"
+                android:endColor="#EEEEEE" />
+        </shape>
+    </item>
+
+    <!-- 第三层：顶部高光 -->
+    <item android:top="2dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="linear"
+                android:angle="270"
+                android:startColor="#FFFFFF"
+                android:endColor="@android:color/transparent"
+                android:centerY="0.05" />
+        </shape>
+    </item>
+
+</layer-list>
