@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 按下状态：白色 -->
+    <item android:state_pressed="true" android:color="#FFFFFF" />
+
+    <!-- 激活状态：深绿色 -->
+    <item android:state_activated="true" android:color="#2E7D32" />
+
+    <!-- 默认状态：黑色 -->
+    <item android:color="#000000" />
+
+</selector>
