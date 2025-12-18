@@ -1,6 +1,7 @@
 package com.example.websnap
 
 import android.annotation.SuppressLint
+import android.app.AlertDialog
 import android.app.TimePickerDialog
 import android.content.ComponentName
 import android.content.ContentValues
@@ -16,6 +17,7 @@ import android.os.Environment
 import android.os.IBinder
 import android.provider.MediaStore
 import android.view.KeyEvent
+import android.view.LayoutInflater
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
@@ -26,9 +28,10 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.websnap.databinding.ActivityMainBinding
 import com.example.websnap.databinding.BottomSheetBookmarksBinding
@@ -142,6 +145,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     /** 用户在弹窗中选择的定时时间 */
     private var selectedScheduledTime: Calendar? = null
 
+    /** 用户自定义的间隔秒数 */
+    private var customIntervalSeconds: Long? = null
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             val binder = service as RefreshService.RefreshBinder
@@ -183,20 +189,13 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
     override fun onStart() {
         super.onStart()
-        // 绑定服务
         Intent(this, RefreshService::class.java).also { intent ->
             bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
         }
     }
 
-    override fun onStop() {
-        super.onStop()
-        // 注意：不在这里解绑，让服务继续运行
-    }
-
     override fun onResume() {
         super.onResume()
-        // 如果没有活动任务，恢复 WebView
         if (refreshService?.hasActiveTask() != true) {
             binding.webView.onResume()
             binding.webView.resumeTimers()
@@ -206,7 +205,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
     override fun onPause() {
         super.onPause()
-        // 如果没有活动任务，暂停 WebView
         if (refreshService?.hasActiveTask() != true) {
             binding.webView.onPause()
             binding.webView.pauseTimers()
@@ -214,7 +212,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     }
 
     override fun onDestroy() {
-        // 解绑服务
         if (isServiceBound) {
             refreshService?.setCallback(null)
             unbindService(serviceConnection)
@@ -618,9 +615,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     // 刷新功能
     // ═══════════════════════════════════════════════════════════════
 
-    /**
-     * 执行刷新（单击刷新按钮）
-     */
     private fun performRefresh() {
         val currentUrl = binding.webView.url
 
@@ -633,38 +627,41 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     }
 
     /**
-     * 更新刷新按钮状态
+     * 更新刷新按钮状态（文字和激活状态）
      */
     private fun updateRefreshButtonState() {
-        val service = refreshService ?: return
+        val service = refreshService
 
-        when {
-            service.hasActiveTask() -> {
-                val task = service.getCurrentTask()
-                val remaining = service.getRemainingSeconds()
+        if (service != null && service.hasActiveTask()) {
+            // 有活动任务：设置激活状态
+            binding.buttonRefresh.isActivated = true
 
-                when (task) {
-                    is RefreshTask.Interval -> {
-                        binding.buttonRefresh.text = getString(
-                            R.string.button_refresh_countdown,
-                            formatSeconds(remaining)
-                        )
-                    }
-                    is RefreshTask.Scheduled -> {
-                        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                        binding.buttonRefresh.text = getString(
-                            R.string.button_refresh_scheduled,
-                            timeFormat.format(Date(task.targetTimeMillis))
-                        )
-                    }
-                    null -> {
-                        binding.buttonRefresh.text = getString(R.string.button_refresh_default)
-                    }
+            val task = service.getCurrentTask()
+            val remaining = service.getRemainingSeconds()
+
+            when (task) {
+                is RefreshTask.Interval -> {
+                    binding.buttonRefresh.text = getString(
+                        R.string.button_refresh_countdown,
+                        formatSeconds(remaining)
+                    )
+                }
+                is RefreshTask.Scheduled -> {
+                    val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                    binding.buttonRefresh.text = getString(
+                        R.string.button_refresh_scheduled,
+                        timeFormat.format(Date(task.targetTimeMillis))
+                    )
+                }
+                null -> {
+                    binding.buttonRefresh.isActivated = false
+                    binding.buttonRefresh.text = getString(R.string.button_refresh_default)
                 }
             }
-            else -> {
-                binding.buttonRefresh.text = getString(R.string.button_refresh_default)
-            }
+        } else {
+            // 无活动任务：恢复默认状态
+            binding.buttonRefresh.isActivated = false
+            binding.buttonRefresh.text = getString(R.string.button_refresh_default)
         }
     }
 
@@ -689,8 +686,19 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         sheetBinding.spinnerInterval.adapter = spinnerAdapter
         sheetBinding.spinnerInterval.setSelection(4) // 默认选择 5 分钟
 
-        // 重置选中时间
+        // 重置选中状态
         selectedScheduledTime = null
+        customIntervalSeconds = null
+
+        // 自定义间隔按钮
+        sheetBinding.buttonCustomInterval.setOnClickListener {
+            showCustomIntervalDialog { seconds ->
+                customIntervalSeconds = seconds
+                // 自动选中间隔刷新
+                sheetBinding.radioInterval.isChecked = true
+                showToast("已设置自定义间隔: ${getIntervalDisplayText(seconds)}")
+            }
+        }
 
         // 时间选择按钮
         sheetBinding.buttonPickTime.setOnClickListener {
@@ -702,6 +710,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             if (isChecked) {
                 sheetBinding.radioScheduled.isChecked = false
                 sheetBinding.containerInterval.alpha = 1f
+                sheetBinding.buttonCustomInterval.alpha = 1f
                 sheetBinding.containerScheduled.alpha = 0.5f
             }
         }
@@ -710,7 +719,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             if (isChecked) {
                 sheetBinding.radioInterval.isChecked = false
                 sheetBinding.containerInterval.alpha = 0.5f
+                sheetBinding.buttonCustomInterval.alpha = 0.5f
                 sheetBinding.containerScheduled.alpha = 1f
+                // 清除自定义间隔
+                customIntervalSeconds = null
             }
         }
 
@@ -764,8 +776,15 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         sheetBinding.buttonConfirm.setOnClickListener {
             when {
                 sheetBinding.radioInterval.isChecked -> {
-                    val selectedPosition = sheetBinding.spinnerInterval.selectedItemPosition
-                    val seconds = intervalValues[selectedPosition].toLong()
+                    // 优先使用自定义间隔
+                    val seconds = customIntervalSeconds
+                        ?: intervalValues[sheetBinding.spinnerInterval.selectedItemPosition].toLong()
+
+                    if (seconds <= 0) {
+                        showToast(getString(R.string.toast_invalid_interval))
+                        return@setOnClickListener
+                    }
+
                     startIntervalRefresh(seconds)
                     showToast(getString(R.string.toast_refresh_started))
                     bottomSheet.dismiss()
@@ -791,19 +810,66 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     }
 
     /**
+     * 显示自定义间隔对话框
+     */
+    private fun showCustomIntervalDialog(onConfirm: (Long) -> Unit) {
+        val dialogView = LayoutInflater.from(this)
+            .inflate(R.layout.dialog_custom_interval, null)
+
+        val editHours = dialogView.findViewById<EditText>(R.id.editTextHours)
+        val editMinutes = dialogView.findViewById<EditText>(R.id.editTextMinutes)
+        val editSeconds = dialogView.findViewById<EditText>(R.id.editTextSeconds)
+        val buttonCancel = dialogView.findViewById<Button>(R.id.buttonCancel)
+        val buttonOk = dialogView.findViewById<Button>(R.id.buttonOk)
+
+        // 设置默认值
+        editHours.setText("0")
+        editMinutes.setText("5")
+        editSeconds.setText("0")
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(true)
+            .create()
+
+        // 设置对话框背景透明，以显示自定义圆角背景
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        buttonCancel.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        buttonOk.setOnClickListener {
+            val hours = editHours.text.toString().toIntOrNull() ?: 0
+            val minutes = editMinutes.text.toString().toIntOrNull() ?: 0
+            val seconds = editSeconds.text.toString().toIntOrNull() ?: 0
+
+            val totalSeconds = (hours * 3600L) + (minutes * 60L) + seconds
+
+            if (totalSeconds <= 0) {
+                showToast(getString(R.string.toast_invalid_interval))
+                return@setOnClickListener
+            }
+
+            onConfirm(totalSeconds)
+            dialog.dismiss()
+        }
+
+        dialog.show()
+    }
+
+    /**
      * 显示时间选择器
      */
     private fun showTimePicker(sheetBinding: BottomSheetRefreshBinding) {
         val calendar = Calendar.getInstance()
 
-        // 自定义 TimePickerDialog 来支持秒
         val hour = calendar.get(Calendar.HOUR_OF_DAY)
         val minute = calendar.get(Calendar.MINUTE)
 
         TimePickerDialog(
             this,
             { _, selectedHour, selectedMinute ->
-                // 弹出秒选择
                 showSecondPicker(sheetBinding, selectedHour, selectedMinute)
             },
             hour,
@@ -813,7 +879,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     }
 
     /**
-     * 显示秒选择器（简化为固定选项）
+     * 显示秒选择器
      */
     private fun showSecondPicker(
         sheetBinding: BottomSheetRefreshBinding,
@@ -823,12 +889,11 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         val seconds = arrayOf("00", "15", "30", "45")
         val secondValues = intArrayOf(0, 15, 30, 45)
 
-        android.app.AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setTitle("选择秒数")
             .setItems(seconds) { _, which ->
                 val second = secondValues[which]
 
-                // 构建目标时间
                 val calendar = Calendar.getInstance().apply {
                     set(Calendar.HOUR_OF_DAY, hour)
                     set(Calendar.MINUTE, minute)
@@ -838,7 +903,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
                 selectedScheduledTime = calendar
 
-                // 更新按钮显示
                 val timeStr = String.format(
                     Locale.getDefault(),
                     "%02d:%02d:%02d",
@@ -895,10 +959,18 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     }
 
     private fun getIntervalDisplayText(seconds: Long): String {
+        val hours = seconds / 3600
+        val minutes = (seconds % 3600) / 60
+        val secs = seconds % 60
+
         return when {
-            seconds < 60 -> "${seconds} 秒"
-            seconds < 3600 -> "${seconds / 60} 分钟"
-            else -> "${seconds / 3600} 小时"
+            hours > 0 && minutes > 0 && secs > 0 -> "${hours}时${minutes}分${secs}秒"
+            hours > 0 && minutes > 0 -> "${hours}时${minutes}分"
+            hours > 0 && secs > 0 -> "${hours}时${secs}秒"
+            hours > 0 -> "${hours}小时"
+            minutes > 0 && secs > 0 -> "${minutes}分${secs}秒"
+            minutes > 0 -> "${minutes}分钟"
+            else -> "${secs}秒"
         }
     }
 
@@ -951,6 +1023,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
     override fun onTaskCancelled() {
         runOnUiThread {
+            binding.buttonRefresh.isActivated = false
             binding.buttonRefresh.text = getString(R.string.button_refresh_default)
         }
     }
