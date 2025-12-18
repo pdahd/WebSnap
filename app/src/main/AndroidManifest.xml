@@ -5,7 +5,14 @@
     <!-- 网络权限 -->
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- 注意：不需要 WRITE_EXTERNAL_STORAGE，使用 MediaStore API -->
+    <!-- 前台服务权限 (Android 9+) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <!-- 前台服务类型声明 (Android 14+) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- 允许发送通知 (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="true"
@@ -15,19 +22,35 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.WebSnap"
         android:networkSecurityConfig="@xml/network_security_config"
-        tools:targetApi="33">
+        tools:targetApi="34">
 
+        <!-- 主 Activity -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            android:launchMode="singleTop">
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 自动刷新前台服务 -->
+        <service
+            android:name=".RefreshService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+
+            <!-- Android 14+ 需要声明 specialUse 的用途 -->
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="webview_auto_refresh" />
+        </service>
+
     </application>
 
 </manifest>
-
