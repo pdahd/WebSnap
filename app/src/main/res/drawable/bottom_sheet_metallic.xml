@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 第一层：外部亮白边框（模拟高光） -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#FFFFFF" />
+            <corners
+                android:topLeftRadius="24dp"
+                android:topRightRadius="24dp"
+                android:bottomLeftRadius="0dp"
+                android:bottomRightRadius="0dp" />
+        </shape>
+    </item>
+
+    <!-- 第二层：金属渐变主体（内缩1dp形成边框效果） -->
+    <item
+        android:left="1dp"
+        android:top="1dp"
+        android:right="1dp"
+        android:bottom="0dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="linear"
+                android:angle="270"
+                android:startColor="#F8F8F8"
+                android:centerColor="#F0F0F0"
+                android:endColor="#E8E8E8" />
+            <corners
+                android:topLeftRadius="23dp"
+                android:topRightRadius="23dp"
+                android:bottomLeftRadius="0dp"
+                android:bottomRightRadius="0dp" />
+        </shape>
+    </item>
+
+    <!-- 第三层：顶部高光线 -->
+    <item
+        android:left="24dp"
+        android:top="2dp"
+        android:right="24dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#FFFFFF" />
+            <size android:height="1dp" />
+            <corners android:radius="1dp" />
+        </shape>
+    </item>
+
+</layer-list>
