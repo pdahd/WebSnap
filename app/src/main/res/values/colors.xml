@@ -7,6 +7,7 @@
 
     <!-- 背景色 -->
     <color name="url_bar_background">#F5F5F5</color>
+    <color name="bottom_bar_background">#FAFAFA</color>
     <color name="edit_text_background">#FFFFFF</color>
     <color name="edit_text_stroke">#DDDDDD</color>
 
@@ -20,4 +21,8 @@
 
     <!-- 状态栏 -->
     <color name="status_bar">#1565C0</color>
+
+    <!-- 按钮颜色 -->
+    <color name="button_cancel_background">#E0E0E0</color>
+    <color name="button_refresh_active">#4CAF50</color>
 </resources>
