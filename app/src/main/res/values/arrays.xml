@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- 间隔刷新选项（显示文本） -->
+    <string-array name="interval_options">
+        <item>10 秒</item>
+        <item>30 秒</item>
+        <item>1 分钟</item>
+        <item>3 分钟</item>
+        <item>5 分钟</item>
+        <item>10 分钟</item>
+        <item>30 分钟</item>
+    </string-array>
+
+    <!-- 间隔刷新选项（秒数值） -->
+    <integer-array name="interval_values">
+        <item>10</item>
+        <item>30</item>
+        <item>60</item>
+        <item>180</item>
+        <item>300</item>
+        <item>600</item>
+        <item>1800</item>
+    </integer-array>
+
+</resources>
