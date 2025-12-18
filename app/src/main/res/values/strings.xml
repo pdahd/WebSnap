@@ -6,22 +6,28 @@
     <!-- 地址栏 -->
     <string name="hint_enter_url">输入网址</string>
     <string name="button_go">GO</string>
-    <string name="checkbox_pc_mode">PC</string>
 
-    <!-- 书签按钮 -->
+    <!-- 顶部按钮 -->
     <string name="button_bookmark_empty">☆</string>
     <string name="button_bookmark_filled">★</string>
+    <string name="button_pc_mode">💻</string>
 
     <!-- 底部按钮 -->
     <string name="button_back">&lt;</string>
     <string name="button_forward">&gt;</string>
-    <string name="button_capture">📷 截取长图</string>
-    <string name="button_capturing">截图中…</string>
+    <string name="button_capture_icon">📷</string>
+    <string name="button_refresh_default">🔄 刷新</string>
+    <string name="button_refresh_countdown">⏱️ %1$s</string>
+    <string name="button_refresh_scheduled">🕐 %1$s</string>
+    <string name="button_refreshing">刷新中…</string>
 
     <!-- 无障碍描述 -->
     <string name="content_desc_back">后退</string>
     <string name="content_desc_forward">前进</string>
     <string name="content_desc_bookmark">书签</string>
+    <string name="content_desc_pc_mode">PC 模式</string>
+    <string name="content_desc_capture">截图</string>
+    <string name="content_desc_refresh">刷新</string>
     <string name="content_desc_delete_bookmark">删除书签</string>
 
     <!-- Toast 提示消息 -->
@@ -53,6 +59,36 @@
     <string name="bookmark_empty_hint">暂无书签\n点击 ☆ 添加当前页面</string>
     <string name="bookmark_item_icon">🔖</string>
     <string name="bookmark_delete_icon">✕</string>
+
+    <!-- 刷新功能 -->
+    <string name="toast_refresh_started">已设置自动刷新</string>
+    <string name="toast_refresh_cancelled">已取消自动刷新</string>
+    <string name="toast_refresh_need_page">请先加载网页</string>
+    <string name="toast_refresh_select_mode">请选择刷新模式</string>
+    <string name="toast_refresh_select_time">请选择刷新时间</string>
+
+    <!-- 刷新设置 (BottomSheet) -->
+    <string name="refresh_sheet_title">⏱️ 设置自动刷新</string>
+    <string name="refresh_option_interval">间隔刷新</string>
+    <string name="refresh_option_scheduled">定时刷新</string>
+    <string name="refresh_interval_prefix">每</string>
+    <string name="refresh_interval_suffix">刷新一次</string>
+    <string name="refresh_scheduled_prefix">在</string>
+    <string name="refresh_pick_time">点击选择时间</string>
+    <string name="refresh_current_task_icon">✅</string>
+    <string name="refresh_current_task_interval">间隔刷新：每 %1$s | 倒计时 %2$s</string>
+    <string name="refresh_current_task_scheduled">定时刷新：目标 %1$s</string>
+    <string name="refresh_button_cancel">取消任务</string>
+    <string name="refresh_button_confirm">确认设置</string>
+
+    <!-- 间隔选项 -->
+    <string name="interval_10_sec">10 秒</string>
+    <string name="interval_30_sec">30 秒</string>
+    <string name="interval_1_min">1 分钟</string>
+    <string name="interval_3_min">3 分钟</string>
+    <string name="interval_5_min">5 分钟</string>
+    <string name="interval_10_min">10 分钟</string>
+    <string name="interval_30_min">30 分钟</string>
 
     <!-- WebView 错误 -->
     <string name="error_page_title">加载失败</string>
