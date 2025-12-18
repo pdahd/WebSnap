@@ -8,8 +8,8 @@
     <!-- 前台服务权限 (Android 9+) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
-    <!-- 前台服务类型声明 (Android 14+) -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- 数据同步类型前台服务 (Android 10+) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <!-- 允许发送通知 (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -22,7 +22,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.WebSnap"
         android:networkSecurityConfig="@xml/network_security_config"
-        tools:targetApi="34">
+        tools:targetApi="33">
 
         <!-- 主 Activity -->
         <activity
@@ -43,13 +43,7 @@
             android:name=".RefreshService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="specialUse">
-
-            <!-- Android 14+ 需要声明 specialUse 的用途 -->
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="webview_auto_refresh" />
-        </service>
+            android:foregroundServiceType="dataSync" />
 
     </application>
 
