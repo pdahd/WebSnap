@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -168,9 +169,10 @@
             android:paddingHorizontal="20dp"
             android:text="@string/dialog_button_cancel"
             android:textSize="14sp"
-            android:textColor="#666666"
+            android:textColor="@color/button_text_color"
             android:background="@drawable/button_outline"
-            android:stateListAnimator="@null" />
+            android:stateListAnimator="@null"
+            app:backgroundTint="@null" />
 
         <Button
             android:id="@+id/buttonOk"
@@ -183,7 +185,8 @@
             android:textStyle="bold"
             android:textColor="@color/button_text_color"
             android:background="@drawable/button_outline"
-            android:stateListAnimator="@null" />
+            android:stateListAnimator="@null"
+            app:backgroundTint="@null" />
 
     </LinearLayout>
 
