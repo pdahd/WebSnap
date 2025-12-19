@@ -44,7 +44,7 @@
             android:autofillHints="no"
             tools:text="https://example.com" />
 
-        <!-- GO 按钮 - 线框风格 -->
+        <!-- GO 按钮 - 修复 Tint -->
         <Button
             android:id="@+id/buttonGo"
             android:layout_width="56dp"
@@ -56,9 +56,10 @@
             android:textStyle="bold"
             android:textColor="@color/button_text_color"
             android:background="@drawable/button_outline"
-            android:stateListAnimator="@null" />
+            android:stateListAnimator="@null"
+            app:backgroundTint="@null" />
 
-        <!-- 书签按钮 - 线框风格 -->
+        <!-- 书签按钮 - 修复 Tint -->
         <Button
             android:id="@+id/buttonBookmark"
             android:layout_width="48dp"
@@ -71,9 +72,10 @@
             android:background="@drawable/button_outline_icon"
             android:stateListAnimator="@null"
             android:contentDescription="@string/content_desc_bookmark"
+            app:backgroundTint="@null"
             tools:text="☆" />
 
-        <!-- PC 模式按钮 - 线框风格 -->
+        <!-- PC 模式按钮 - 修复 Tint -->
         <Button
             android:id="@+id/buttonPcMode"
             android:layout_width="48dp"
@@ -85,6 +87,7 @@
             android:background="@drawable/button_outline_icon"
             android:stateListAnimator="@null"
             android:contentDescription="@string/content_desc_pc_mode"
+            app:backgroundTint="@null"
             tools:text="💻" />
 
     </LinearLayout>
@@ -137,7 +140,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- 后退按钮 -->
+        <!-- 后退按钮 - 修复 Tint -->
         <Button
             android:id="@+id/buttonBack"
             android:layout_width="52dp"
@@ -150,9 +153,10 @@
             android:stateListAnimator="@null"
             android:enabled="false"
             android:contentDescription="@string/content_desc_back"
+            app:backgroundTint="@null"
             tools:enabled="true" />
 
-        <!-- 智能刷新按钮（主角） -->
+        <!-- 智能刷新按钮（主角）- 修复 Tint -->
         <Button
             android:id="@+id/buttonRefresh"
             android:layout_width="0dp"
@@ -164,9 +168,10 @@
             android:textColor="@color/button_text_color_refresh"
             android:background="@drawable/button_refresh_outline"
             android:stateListAnimator="@null"
-            android:contentDescription="@string/content_desc_refresh" />
+            android:contentDescription="@string/content_desc_refresh"
+            app:backgroundTint="@null" />
 
-        <!-- 截图按钮 -->
+        <!-- 截图按钮 - 修复 Tint -->
         <Button
             android:id="@+id/buttonCapture"
             android:layout_width="52dp"
@@ -175,9 +180,10 @@
             android:textSize="20sp"
             android:background="@drawable/button_outline_icon"
             android:stateListAnimator="@null"
-            android:contentDescription="@string/content_desc_capture" />
+            android:contentDescription="@string/content_desc_capture"
+            app:backgroundTint="@null" />
 
-        <!-- 前进按钮 -->
+        <!-- 前进按钮 - 修复 Tint -->
         <Button
             android:id="@+id/buttonForward"
             android:layout_width="52dp"
@@ -191,6 +197,7 @@
             android:stateListAnimator="@null"
             android:enabled="false"
             android:contentDescription="@string/content_desc_forward"
+            app:backgroundTint="@null"
             tools:enabled="true" />
 
     </LinearLayout>
