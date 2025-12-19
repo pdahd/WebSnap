@@ -13,7 +13,7 @@
         <!-- 状态栏颜色 -->
         <item name="android:statusBarColor">@color/status_bar</item>
 
-        <!-- 禁用默认按钮样式，使用我们的自定义样式 -->
+        <!-- 禁用默认按钮样式 -->
         <item name="materialButtonStyle">@style/Widget.WebSnap.Button.Outline</item>
 
         <!-- 进度条颜色 -->
@@ -30,7 +30,6 @@
     <!-- 自定义按钮样式：线框风格                                      -->
     <!-- ═══════════════════════════════════════════════════════════ -->
     <style name="Widget.WebSnap.Button.Outline" parent="Widget.MaterialComponents.Button.TextButton">
-        <!-- 清除默认背景着色 -->
         <item name="backgroundTint">@null</item>
         <item name="android:background">@drawable/button_outline</item>
         <item name="android:textColor">@color/button_text_color</item>
@@ -76,16 +75,42 @@
     </style>
 
     <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- TimePicker 主题：圆角                                        -->
+    <!-- TimePicker 主题：增强对比度                                   -->
     <!-- ═══════════════════════════════════════════════════════════ -->
     <style name="Theme.WebSnap.TimePicker" parent="ThemeOverlay.MaterialComponents.Dialog">
+        <!-- 对话框背景 -->
         <item name="android:windowBackground">@drawable/dialog_background_metallic</item>
         <item name="android:backgroundDimEnabled">true</item>
         <item name="android:backgroundDimAmount">0.5</item>
+
+        <!-- 主色调：黑色系 -->
         <item name="colorPrimary">#000000</item>
+        <item name="colorPrimaryDark">#000000</item>
         <item name="colorAccent">#000000</item>
+
+        <!-- 控件激活色 -->
+        <item name="colorControlActivated">#000000</item>
+        <item name="colorControlHighlight">#33000000</item>
+        <item name="colorControlNormal">#666666</item>
+
+        <!-- 文字颜色 -->
         <item name="android:textColorPrimary">#000000</item>
-        <item name="android:textColorSecondary">#666666</item>
+        <item name="android:textColorSecondary">#333333</item>
+
+        <!-- 表盘背景增强 -->
+        <item name="android:colorBackground">#F0F0F0</item>
+        <item name="android:colorBackgroundFloating">#FFFFFF</item>
+
+        <!-- 时钟面板 -->
+        <item name="materialTimePickerStyle">@style/Widget.WebSnap.TimePicker</item>
+        <item name="materialTimePickerTheme">@style/Widget.WebSnap.TimePicker</item>
+    </style>
+
+    <!-- TimePicker 面板样式 -->
+    <style name="Widget.WebSnap.TimePicker" parent="Widget.MaterialComponents.TimePicker">
+        <item name="clockFaceBackgroundColor">#E8E8E8</item>
+        <item name="clockHandColor">#000000</item>
+        <item name="clockNumberTextColor">#000000</item>
     </style>
 
     <!-- ═══════════════════════════════════════════════════════════ -->
