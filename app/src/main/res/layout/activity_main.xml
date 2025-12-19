@@ -125,7 +125,7 @@
         app:layout_constraintEnd_toEndOf="parent" />
 
     <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- 底部按钮区域 - 金属质感                                       -->
+    <!-- 底部按钮区域 - 统一高度 48dp（与顶部一致）                     -->
     <!-- ═══════════════════════════════════════════════════════════ -->
     <LinearLayout
         android:id="@+id/bottomButtonContainer"
@@ -133,7 +133,7 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:paddingHorizontal="10dp"
-        android:paddingVertical="8dp"
+        android:paddingVertical="10dp"
         android:gravity="center_vertical"
         android:background="@drawable/bottom_bar_metallic"
         android:elevation="8dp"
@@ -141,13 +141,15 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- 后退按钮 -->
+        <!-- 后退按钮：48dp 统一高度 -->
         <Button
             android:id="@+id/buttonBack"
-            android:layout_width="52dp"
-            android:layout_height="56dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="0dp"
+            android:gravity="center"
             android:text="@string/button_back"
-            android:textSize="24sp"
+            android:textSize="20sp"
             android:textStyle="bold"
             android:textColor="@color/button_text_color"
             android:background="@drawable/button_outline"
@@ -159,12 +161,12 @@
 
         <!-- ═══════════════════════════════════════════════════════ -->
         <!-- 智能刷新按钮（主角）                                      -->
-        <!-- LED 数码管字体 + 28sp + 绝对垂直居中                      -->
+        <!-- 48dp 高度 + 28sp 大字 + 绝对居中                          -->
         <!-- ═══════════════════════════════════════════════════════ -->
         <Button
             android:id="@+id/buttonRefresh"
             android:layout_width="0dp"
-            android:layout_height="56dp"
+            android:layout_height="48dp"
             android:layout_weight="1"
             android:layout_marginHorizontal="8dp"
             android:padding="0dp"
@@ -181,26 +183,30 @@
             app:backgroundTint="@null"
             tools:text="⏱️ 04:32" />
 
-        <!-- 截图按钮 -->
+        <!-- 截图按钮：48dp 统一高度 -->
         <Button
             android:id="@+id/buttonCapture"
-            android:layout_width="52dp"
-            android:layout_height="56dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="0dp"
+            android:gravity="center"
             android:text="@string/button_capture_icon"
-            android:textSize="24sp"
+            android:textSize="20sp"
             android:background="@drawable/button_outline_icon"
             android:stateListAnimator="@null"
             android:contentDescription="@string/content_desc_capture"
             app:backgroundTint="@null" />
 
-        <!-- 前进按钮 -->
+        <!-- 前进按钮：48dp 统一高度 -->
         <Button
             android:id="@+id/buttonForward"
-            android:layout_width="52dp"
-            android:layout_height="56dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_marginStart="8dp"
+            android:padding="0dp"
+            android:gravity="center"
             android:text="@string/button_forward"
-            android:textSize="24sp"
+            android:textSize="20sp"
             android:textStyle="bold"
             android:textColor="@color/button_text_color"
             android:background="@drawable/button_outline"
