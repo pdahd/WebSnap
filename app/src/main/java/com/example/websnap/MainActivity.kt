@@ -534,7 +534,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     }
 
     private fun showBookmarkSheet() {
-        val bottomSheet = BottomSheetDialog(this)
+        // 使用自定义主题
+        val bottomSheet = BottomSheetDialog(this, R.style.Theme_WebSnap_BottomSheet)
         val sheetBinding = BottomSheetBookmarksBinding.inflate(layoutInflater)
         bottomSheet.setContentView(sheetBinding.root)
 
@@ -669,7 +670,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
      * 显示刷新设置 BottomSheet
      */
     private fun showRefreshSheet() {
-        val bottomSheet = BottomSheetDialog(this)
+        // 使用自定义主题
+        val bottomSheet = BottomSheetDialog(this, R.style.Theme_WebSnap_BottomSheet)
         val sheetBinding = BottomSheetRefreshBinding.inflate(layoutInflater)
         bottomSheet.setContentView(sheetBinding.root)
 
@@ -859,7 +861,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     }
 
     /**
-     * 显示时间选择器
+     * 显示时间选择器（应用圆角主题）
      */
     private fun showTimePicker(sheetBinding: BottomSheetRefreshBinding) {
         val calendar = Calendar.getInstance()
@@ -867,8 +869,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         val hour = calendar.get(Calendar.HOUR_OF_DAY)
         val minute = calendar.get(Calendar.MINUTE)
 
+        // 使用自定义主题
         TimePickerDialog(
             this,
+            R.style.Theme_WebSnap_TimePicker,
             { _, selectedHour, selectedMinute ->
                 showSecondPicker(sheetBinding, selectedHour, selectedMinute)
             },
@@ -879,7 +883,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     }
 
     /**
-     * 显示秒选择器
+     * 显示秒选择器（应用圆角主题）
      */
     private fun showSecondPicker(
         sheetBinding: BottomSheetRefreshBinding,
@@ -889,7 +893,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         val seconds = arrayOf("00", "15", "30", "45")
         val secondValues = intArrayOf(0, 15, 30, 45)
 
-        AlertDialog.Builder(this)
+        // 使用自定义主题
+        AlertDialog.Builder(this, R.style.Theme_WebSnap_SecondPicker)
             .setTitle("选择秒数")
             .setItems(seconds) { _, which ->
                 val second = secondValues[which]
