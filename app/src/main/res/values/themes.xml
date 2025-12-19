@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- 主应用主题                                                   -->
-    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 主应用主题 -->
     <style name="Theme.WebSnap" parent="Theme.MaterialComponents.Light.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
         <item name="colorPrimaryDark">@color/primary_dark</item>
@@ -14,7 +12,7 @@
         <item name="alertDialogTheme">@style/Theme.WebSnap.AlertDialog</item>
     </style>
 
-    <!-- 自定义按钮样式：线框风格 -->
+    <!-- 线框按钮样式 -->
     <style name="Widget.WebSnap.Button.Outline" parent="Widget.MaterialComponents.Button.TextButton">
         <item name="backgroundTint">@null</item>
         <item name="android:background">@drawable/button_outline</item>
@@ -56,9 +54,7 @@
         <item name="colorAccent">#000000</item>
     </style>
 
-    <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- TimePicker 主题：天蓝色背景 + 优化后的按钮间距                -->
-    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- TimePicker 主题：保留 Claude 的颜色逻辑，仅微调按钮数值 -->
     <style name="Theme.WebSnap.TimePicker" parent="Theme.MaterialComponents.Light.Dialog.Alert">
         <item name="android:windowBackground">@drawable/dialog_background_timepicker</item>
         <item name="android:backgroundDimEnabled">true</item>
@@ -67,20 +63,36 @@
         <item name="colorSurface">#64B5F6</item>
         <item name="colorOnSurface">#000000</item>
         <item name="colorPrimary">#000000</item>
+        <item name="colorPrimaryVariant">#000000</item>
+        <item name="colorSecondary">#000000</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
         <item name="colorAccent">#000000</item>
+        <item name="colorControlActivated">#000000</item>
+        <item name="colorControlHighlight">#33000000</item>
+        <item name="colorControlNormal">#000000</item>
         <item name="android:textColorPrimary">#000000</item>
         <item name="android:textColorSecondary">#000000</item>
-        
-        <!-- 核心：应用更窄、间距更大的按钮样式 -->
+        <item name="android:textColorHint">#333333</item>
+        <item name="android:buttonBarButtonStyle">@style/Widget.WebSnap.TimePickerButton</item>
         <item name="buttonBarPositiveButtonStyle">@style/Widget.WebSnap.TimePickerButton</item>
         <item name="buttonBarNegativeButtonStyle">@style/Widget.WebSnap.TimePickerButton</item>
+        <item name="buttonBarNeutralButtonStyle">@style/Widget.WebSnap.TimePickerButton</item>
     </style>
 
-    <!-- TimePicker 底部按钮：缩减宽度，增加间距 -->
-    <style name="Widget.WebSnap.TimePickerButton" parent="Widget.WebSnap.Button.Outline">
-        <item name="android:minWidth">72dp</item> <!-- 从 88dp 缩减到 72dp -->
-        <item name="android:layout_marginEnd">12dp</item> <!-- 增加按钮间距 -->
-        <item name="android:paddingHorizontal">12dp</item>
+    <!-- TimePicker 按钮样式：仅缩减宽度，增加间距 -->
+    <style name="Widget.WebSnap.TimePickerButton" parent="Widget.MaterialComponents.Button.TextButton">
+        <item name="android:textColor">@color/button_text_color</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textSize">14sp</item>
+        <item name="backgroundTint">@null</item>
+        <item name="android:background">@drawable/button_outline</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="rippleColor">@android:color/transparent</item>
+        <item name="android:minWidth">64dp</item> <!-- 从 88dp 缩减至 64dp -->
+        <item name="android:minHeight">40dp</item>
+        <item name="android:layout_marginEnd">12dp</item> <!-- 增加间距 -->
+        <item name="android:paddingHorizontal">8dp</item>
     </style>
 
     <!-- 秒选择对话框主题 -->
@@ -90,8 +102,22 @@
         <item name="android:backgroundDimAmount">0.5</item>
         <item name="android:colorBackground">#F5F5F5</item>
         <item name="colorSurface">#F5F5F5</item>
+        <item name="colorOnSurface">#000000</item>
+        <item name="colorPrimary">#000000</item>
+        <item name="colorAccent">#000000</item>
         <item name="android:textColorPrimary">#000000</item>
-        <item name="buttonBarPositiveButtonStyle">@style/Widget.WebSnap.Button.Outline</item>
-        <item name="buttonBarNegativeButtonStyle">@style/Widget.WebSnap.Button.Outline</item>
+        <item name="android:textColorSecondary">#333333</item>
+        <item name="android:buttonBarButtonStyle">@style/Widget.WebSnap.SecondPickerButton</item>
+        <item name="buttonBarPositiveButtonStyle">@style/Widget.WebSnap.SecondPickerButton</item>
+        <item name="buttonBarNegativeButtonStyle">@style/Widget.WebSnap.SecondPickerButton</item>
+    </style>
+
+    <style name="Widget.WebSnap.SecondPickerButton" parent="Widget.MaterialComponents.Button.TextButton">
+        <item name="android:textColor">@color/button_text_color</item>
+        <item name="android:textStyle">bold</item>
+        <item name="backgroundTint">@null</item>
+        <item name="android:background">@drawable/button_outline</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="rippleColor">@android:color/transparent</item>
     </style>
 </resources>
