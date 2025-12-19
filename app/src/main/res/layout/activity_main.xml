@@ -148,7 +148,7 @@
             android:layout_weight="1"
             android:layout_marginHorizontal="8dp"
             android:padding="0dp"
-            android:paddingBottom="5dp" 
+            android:paddingBottom="8dp" 
             android:gravity="center"
             android:text="@string/button_refresh_default"
             android:fontFamily="@font/digital_7_mono"
