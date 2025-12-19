@@ -145,9 +145,9 @@
         <Button
             android:id="@+id/buttonBack"
             android:layout_width="52dp"
-            android:layout_height="52dp"
+            android:layout_height="56dp"
             android:text="@string/button_back"
-            android:textSize="22sp"
+            android:textSize="24sp"
             android:textStyle="bold"
             android:textColor="@color/button_text_color"
             android:background="@drawable/button_outline"
@@ -159,20 +159,22 @@
 
         <!-- ═══════════════════════════════════════════════════════ -->
         <!-- 智能刷新按钮（主角）                                      -->
-        <!-- LED 数码管字体 + 32sp 霸气大字 + 按下反色                 -->
+        <!-- LED 数码管字体 + 28sp + 绝对垂直居中                      -->
         <!-- ═══════════════════════════════════════════════════════ -->
         <Button
             android:id="@+id/buttonRefresh"
             android:layout_width="0dp"
-            android:layout_height="52dp"
+            android:layout_height="56dp"
             android:layout_weight="1"
             android:layout_marginHorizontal="8dp"
-            android:paddingHorizontal="12dp"
+            android:padding="0dp"
+            android:gravity="center"
             android:text="@string/button_refresh_default"
             android:fontFamily="@font/digital_7_mono"
-            android:textSize="32sp"
+            android:textSize="28sp"
             android:textStyle="bold"
             android:textColor="@color/button_text_color_refresh"
+            android:includeFontPadding="false"
             android:background="@drawable/button_refresh_outline"
             android:stateListAnimator="@null"
             android:contentDescription="@string/content_desc_refresh"
@@ -183,9 +185,9 @@
         <Button
             android:id="@+id/buttonCapture"
             android:layout_width="52dp"
-            android:layout_height="52dp"
+            android:layout_height="56dp"
             android:text="@string/button_capture_icon"
-            android:textSize="22sp"
+            android:textSize="24sp"
             android:background="@drawable/button_outline_icon"
             android:stateListAnimator="@null"
             android:contentDescription="@string/content_desc_capture"
@@ -195,10 +197,10 @@
         <Button
             android:id="@+id/buttonForward"
             android:layout_width="52dp"
-            android:layout_height="52dp"
+            android:layout_height="56dp"
             android:layout_marginStart="8dp"
             android:text="@string/button_forward"
-            android:textSize="22sp"
+            android:textSize="24sp"
             android:textStyle="bold"
             android:textColor="@color/button_text_color"
             android:background="@drawable/button_outline"
