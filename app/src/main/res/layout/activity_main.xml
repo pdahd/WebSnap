@@ -9,9 +9,7 @@
     android:background="#FFFFFF"
     tools:context=".MainActivity">
 
-    <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- 顶部地址栏区域 - 金属质感                                    -->
-    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 顶部地址栏区域 -->
     <LinearLayout
         android:id="@+id/urlBarContainer"
         android:layout_width="0dp"
@@ -25,7 +23,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- URL 输入框 -->
         <EditText
             android:id="@+id/editTextUrl"
             android:layout_width="0dp"
@@ -35,22 +32,17 @@
             android:inputType="textUri"
             android:imeOptions="actionGo"
             android:singleLine="true"
-            android:maxLines="1"
-            android:paddingHorizontal="14dp"
             android:background="@drawable/edit_text_outline"
+            android:paddingHorizontal="14dp"
             android:textSize="14sp"
             android:textColor="#000000"
-            android:textColorHint="#999999"
-            android:autofillHints="no"
-            tools:text="https://example.com" />
+            android:autofillHints="no" />
 
-        <!-- GO 按钮 -->
         <Button
             android:id="@+id/buttonGo"
             android:layout_width="56dp"
             android:layout_height="48dp"
             android:layout_marginStart="8dp"
-            android:padding="0dp"
             android:text="@string/button_go"
             android:textSize="14sp"
             android:textStyle="bold"
@@ -59,62 +51,41 @@
             android:stateListAnimator="@null"
             app:backgroundTint="@null" />
 
-        <!-- 书签按钮 -->
         <Button
             android:id="@+id/buttonBookmark"
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:layout_marginStart="8dp"
-            android:padding="0dp"
             android:text="@string/button_bookmark_empty"
             android:textSize="18sp"
             android:textColor="@color/button_text_color"
             android:background="@drawable/button_outline_icon"
             android:stateListAnimator="@null"
-            android:contentDescription="@string/content_desc_bookmark"
-            app:backgroundTint="@null"
-            tools:text="☆" />
+            app:backgroundTint="@null" />
 
-        <!-- PC 模式按钮 -->
         <Button
             android:id="@+id/buttonPcMode"
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:layout_marginStart="8dp"
-            android:padding="0dp"
             android:text="@string/button_pc_mode"
             android:textSize="16sp"
             android:background="@drawable/button_outline_icon"
             android:stateListAnimator="@null"
-            android:contentDescription="@string/content_desc_pc_mode"
-            app:backgroundTint="@null"
-            tools:text="💻" />
-
+            app:backgroundTint="@null" />
     </LinearLayout>
 
-    <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- 加载进度条                                                   -->
-    <!-- ═══════════════════════════════════════════════════════════ -->
     <ProgressBar
         android:id="@+id/progressBar"
         style="@style/Widget.AppCompat.ProgressBar.Horizontal"
         android:layout_width="0dp"
         android:layout_height="3dp"
-        android:indeterminate="false"
-        android:max="100"
-        android:progress="0"
         android:progressTint="#000000"
-        android:progressBackgroundTint="#E0E0E0"
         android:visibility="gone"
         app:layout_constraintTop_toBottomOf="@id/urlBarContainer"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        tools:visibility="visible"
-        tools:progress="50" />
+        app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- WebView 主体区域                                             -->
-    <!-- ═══════════════════════════════════════════════════════════ -->
     <WebView
         android:id="@+id/webView"
         android:layout_width="0dp"
@@ -124,9 +95,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- 底部按钮区域 - 统一高度 48dp（与顶部一致）                     -->
-    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 底部按钮区域 - 统一高度 48dp -->
     <LinearLayout
         android:id="@+id/bottomButtonContainer"
         android:layout_width="0dp"
@@ -141,27 +110,21 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- 后退按钮：48dp 统一高度 -->
         <Button
             android:id="@+id/buttonBack"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:padding="0dp"
-            android:gravity="center"
             android:text="@string/button_back"
             android:textSize="20sp"
             android:textStyle="bold"
             android:textColor="@color/button_text_color"
             android:background="@drawable/button_outline"
             android:stateListAnimator="@null"
-            android:enabled="false"
-            android:contentDescription="@string/content_desc_back"
-            app:backgroundTint="@null"
-            tools:enabled="true" />
+            app:backgroundTint="@null" />
 
         <!-- ═══════════════════════════════════════════════════════ -->
-        <!-- 智能刷新按钮（主角）                                      -->
-        <!-- 48dp 高度 + 28sp 大字 + 绝对居中                          -->
+        <!-- 智能刷新按钮：最终平衡版                                  -->
+        <!-- 26sp 兼顾大小，paddingBottom="2dp" 向上微调修正汉字偏移     -->
         <!-- ═══════════════════════════════════════════════════════ -->
         <Button
             android:id="@+id/buttonRefresh"
@@ -169,53 +132,40 @@
             android:layout_height="48dp"
             android:layout_weight="1"
             android:layout_marginHorizontal="8dp"
-            android:padding="0dp"
+            android:paddingTop="0dp"
+            android:paddingBottom="2dp" 
             android:gravity="center"
-            android:text="@string/button_refresh_default"
             android:fontFamily="@font/digital_7_mono"
-            android:textSize="28sp"
+            android:textSize="26sp"
             android:textStyle="bold"
             android:textColor="@color/button_text_color_refresh"
             android:includeFontPadding="false"
             android:background="@drawable/button_refresh_outline"
             android:stateListAnimator="@null"
-            android:contentDescription="@string/content_desc_refresh"
             app:backgroundTint="@null"
             tools:text="⏱️ 04:32" />
 
-        <!-- 截图按钮：48dp 统一高度 -->
         <Button
             android:id="@+id/buttonCapture"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:padding="0dp"
-            android:gravity="center"
             android:text="@string/button_capture_icon"
             android:textSize="20sp"
             android:background="@drawable/button_outline_icon"
             android:stateListAnimator="@null"
-            android:contentDescription="@string/content_desc_capture"
             app:backgroundTint="@null" />
 
-        <!-- 前进按钮：48dp 统一高度 -->
         <Button
             android:id="@+id/buttonForward"
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:layout_marginStart="8dp"
-            android:padding="0dp"
-            android:gravity="center"
             android:text="@string/button_forward"
             android:textSize="20sp"
             android:textStyle="bold"
             android:textColor="@color/button_text_color"
             android:background="@drawable/button_outline"
             android:stateListAnimator="@null"
-            android:enabled="false"
-            android:contentDescription="@string/content_desc_forward"
-            app:backgroundTint="@null"
-            tools:enabled="true" />
-
+            app:backgroundTint="@null" />
     </LinearLayout>
-
 </androidx.constraintlayout.widget.ConstraintLayout>
