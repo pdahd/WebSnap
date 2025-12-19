@@ -6,7 +6,6 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@drawable/bottom_sheet_metallic"
-    android:elevation="16dp"
     android:paddingBottom="24dp">
 
     <!-- 拖动指示条 -->
@@ -47,9 +46,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- 间隔刷新选项                                                 -->
-    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 间隔刷新选项 -->
     <RadioButton
         android:id="@+id/radioInterval"
         android:layout_width="0dp"
@@ -85,7 +82,6 @@
             android:textSize="14sp"
             android:textColor="#333333" />
 
-        <!-- 间隔选择 Spinner -->
         <Spinner
             android:id="@+id/spinnerInterval"
             android:layout_width="0dp"
@@ -105,7 +101,7 @@
 
     </LinearLayout>
 
-    <!-- 自定义按钮 -->
+    <!-- 自定义按钮 - 修复 Tint -->
     <Button
         android:id="@+id/buttonCustomInterval"
         android:layout_width="wrap_content"
@@ -118,12 +114,11 @@
         android:textColor="@color/button_text_color"
         android:background="@drawable/button_outline"
         android:stateListAnimator="@null"
+        app:backgroundTint="@null"
         app:layout_constraintTop_toBottomOf="@id/containerInterval"
         app:layout_constraintStart_toStartOf="parent" />
 
-    <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- 定时刷新选项                                                 -->
-    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 定时刷新选项 -->
     <RadioButton
         android:id="@+id/radioScheduled"
         android:layout_width="0dp"
@@ -159,7 +154,7 @@
             android:textSize="14sp"
             android:textColor="#333333" />
 
-        <!-- 时间显示/选择按钮 -->
+        <!-- 时间选择按钮 - 修复 Tint -->
         <Button
             android:id="@+id/buttonPickTime"
             android:layout_width="0dp"
@@ -171,6 +166,7 @@
             android:textColor="@color/button_text_color"
             android:background="@drawable/button_outline"
             android:stateListAnimator="@null"
+            app:backgroundTint="@null"
             tools:text="14:30:00" />
 
     </LinearLayout>
@@ -187,9 +183,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- 当前任务状态                                                 -->
-    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 当前任务状态 -->
     <LinearLayout
         android:id="@+id/containerCurrentTask"
         android:layout_width="0dp"
@@ -224,9 +218,7 @@
 
     </LinearLayout>
 
-    <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- 底部按钮                                                     -->
-    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 底部按钮 -->
     <LinearLayout
         android:id="@+id/containerButtons"
         android:layout_width="0dp"
@@ -239,7 +231,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- 取消任务按钮 -->
+        <!-- 取消任务按钮 - 修复 Tint -->
         <Button
             android:id="@+id/buttonCancelTask"
             android:layout_width="0dp"
@@ -248,13 +240,14 @@
             android:layout_marginEnd="10dp"
             android:text="@string/refresh_button_cancel"
             android:textSize="14sp"
-            android:textColor="#666666"
+            android:textColor="@color/button_text_color"
             android:background="@drawable/button_outline"
             android:stateListAnimator="@null"
             android:visibility="gone"
+            app:backgroundTint="@null"
             tools:visibility="visible" />
 
-        <!-- 确认设置按钮 -->
+        <!-- 确认设置按钮 - 修复 Tint -->
         <Button
             android:id="@+id/buttonConfirm"
             android:layout_width="0dp"
@@ -265,7 +258,8 @@
             android:textStyle="bold"
             android:textColor="@color/button_text_color"
             android:background="@drawable/button_outline"
-            android:stateListAnimator="@null" />
+            android:stateListAnimator="@null"
+            app:backgroundTint="@null" />
 
     </LinearLayout>
 
