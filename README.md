@@ -1,2 +1,2 @@
 # WebSnap
-Android WebView Long Screenshot Tool
+Android WebView Long Screenshot Tool.
