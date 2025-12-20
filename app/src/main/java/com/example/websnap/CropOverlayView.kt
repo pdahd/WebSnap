@@ -45,10 +45,10 @@ class CropOverlayView @JvmOverloads constructor(
         private const val BORDER_WIDTH_DP = 2f
 
         /** 角手柄长度 (dp) */
-        private const val CORNER_LENGTH_DP = 24f
+        private const val CORNER_LENGTH_DP = 28f
 
-        /** 角手柄宽度 (dp) */
-        private const val CORNER_WIDTH_DP = 4f
+        /** 角手柄宽度 (dp) - 加粗 */
+        private const val CORNER_WIDTH_DP = 8f
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -110,22 +110,22 @@ class CropOverlayView @JvmOverloads constructor(
         style = Paint.Style.FILL
     }
 
-    /** 边框画笔 */
+    /** 边框画笔（白色细线，保持不变） */
     private val borderPaint = Paint().apply {
         color = Color.WHITE
         style = Paint.Style.STROKE
         isAntiAlias = true
     }
 
-    /** 角手柄画笔 */
+    /** 角手柄画笔（红色加粗） */
     private val cornerPaint = Paint().apply {
-        color = Color.WHITE
+        color = Color.parseColor("#FF0000")
         style = Paint.Style.STROKE
         isAntiAlias = true
         strokeCap = Paint.Cap.SQUARE
     }
 
-    /** 网格线画笔 */
+    /** 网格线画笔（半透明白色，保持不变） */
     private val gridPaint = Paint().apply {
         color = Color.parseColor("#80FFFFFF")
         style = Paint.Style.STROKE
@@ -230,7 +230,7 @@ class CropOverlayView @JvmOverloads constructor(
         // 3. 绘制边框
         canvas.drawRect(cropRect, borderPaint)
 
-        // 4. 绘制四个角手柄
+        // 4. 绘制四个角手柄（红色加粗）
         drawCorners(canvas)
     }
 
@@ -278,50 +278,52 @@ class CropOverlayView @JvmOverloads constructor(
     }
 
     private fun drawCorners(canvas: Canvas) {
+        val halfWidth = cornerWidth / 2f
+
         // 左上角
         canvas.drawLine(
-            cropRect.left, cropRect.top,
+            cropRect.left - halfWidth, cropRect.top,
             cropRect.left + cornerLength, cropRect.top,
             cornerPaint
         )
         canvas.drawLine(
-            cropRect.left, cropRect.top,
+            cropRect.left, cropRect.top - halfWidth,
             cropRect.left, cropRect.top + cornerLength,
             cornerPaint
         )
 
         // 右上角
         canvas.drawLine(
-            cropRect.right, cropRect.top,
+            cropRect.right + halfWidth, cropRect.top,
             cropRect.right - cornerLength, cropRect.top,
             cornerPaint
         )
         canvas.drawLine(
-            cropRect.right, cropRect.top,
+            cropRect.right, cropRect.top - halfWidth,
             cropRect.right, cropRect.top + cornerLength,
             cornerPaint
         )
 
         // 左下角
         canvas.drawLine(
-            cropRect.left, cropRect.bottom,
+            cropRect.left - halfWidth, cropRect.bottom,
             cropRect.left + cornerLength, cropRect.bottom,
             cornerPaint
         )
         canvas.drawLine(
-            cropRect.left, cropRect.bottom,
+            cropRect.left, cropRect.bottom + halfWidth,
             cropRect.left, cropRect.bottom - cornerLength,
             cornerPaint
         )
 
         // 右下角
         canvas.drawLine(
-            cropRect.right, cropRect.bottom,
+            cropRect.right + halfWidth, cropRect.bottom,
             cropRect.right - cornerLength, cropRect.bottom,
             cornerPaint
         )
         canvas.drawLine(
-            cropRect.right, cropRect.bottom,
+            cropRect.right, cropRect.bottom + halfWidth,
             cropRect.right, cropRect.bottom - cornerLength,
             cornerPaint
         )
