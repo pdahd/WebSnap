@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 按下状态：黑色文字（配合白色背景） -->
+    <item android:state_pressed="true" android:color="#000000" />
+
+    <!-- 默认状态：白色文字 -->
+    <item android:color="#FFFFFF" />
+
+</selector>
