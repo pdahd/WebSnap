@@ -2,9 +2,9 @@ name: Android CI
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master", "feature-crop" ]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master", "feature-crop" ]
   
   # 允许手动触发构建
   workflow_dispatch:
