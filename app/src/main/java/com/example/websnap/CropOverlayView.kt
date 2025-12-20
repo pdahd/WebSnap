@@ -130,9 +130,9 @@ class CropOverlayView @JvmOverloads constructor(
         strokeJoin = Paint.Join.ROUND
     }
 
-    /** 网格线画笔（半透明白色，保持不变） */
+    /** 网格线画笔（半透明蓝色，与主题色一致） */
     private val gridPaint = Paint().apply {
-        color = Color.parseColor("#80FFFFFF")
+        color = Color.parseColor("#801976D2")
         style = Paint.Style.STROKE
         isAntiAlias = true
     }
