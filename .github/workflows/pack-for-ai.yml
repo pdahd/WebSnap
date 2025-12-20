@@ -1,0 +1,27 @@
+name: Pack Codebase for AI
+
+on:
+  workflow_dispatch: # 允许你手动点击运行
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run Repomix
+        # npx repomix --include 指定只打包源码，避免混入 build 等垃圾文件
+        # 它会自动忽略 .gitignore 里的内容（比如 build 文件夹）
+        run: npx repomix --include "app/src/main,build.gradle,settings.gradle"
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: project-pack-for-ai
+          path: repomix-output.txt
