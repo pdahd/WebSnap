@@ -3,9 +3,9 @@ name: Android CI
 on:
   push:
     # 将 feature-crop 加入监控名单
-    branches: [ "main", "master", "feature-crop" ]
+    branches: [ "main", "master", "feature-cro" ]
   pull_request:
-    branches: [ "main", "master", "feature-crop" ]
+    branches: [ "main", "master", "feature-cro" ]
   
   # 允许手动触发构建
   workflow_dispatch:
