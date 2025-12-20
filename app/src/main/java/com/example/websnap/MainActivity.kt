@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.app.TimePickerDialog
 import android.content.ComponentName
-import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
@@ -13,9 +12,7 @@ import android.graphics.Canvas
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.os.IBinder
-import android.provider.MediaStore
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
@@ -37,7 +34,6 @@ import com.example.websnap.databinding.ActivityMainBinding
 import com.example.websnap.databinding.BottomSheetBookmarksBinding
 import com.example.websnap.databinding.BottomSheetRefreshBinding
 import com.google.android.material.bottomsheet.BottomSheetDialog
-import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -142,10 +138,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private var isServiceBound = false
     private var refreshBottomSheet: BottomSheetDialog? = null
 
-    /** 用户在弹窗中选择的定时时间 */
     private var selectedScheduledTime: Calendar? = null
-
-    /** 用户自定义的间隔秒数 */
     private var customIntervalSeconds: Long? = null
 
     private val serviceConnection = object : ServiceConnection {
@@ -154,8 +147,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             refreshService = binder.getService()
             refreshService?.setCallback(this@MainActivity)
             isServiceBound = true
-
-            // 恢复 UI 状态
             updateRefreshButtonState()
         }
 
@@ -406,12 +397,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     // ═══════════════════════════════════════════════════════════════
 
     private fun setupListeners() {
-        // GO 按钮
         binding.buttonGo.setOnClickListener {
             loadUrl()
         }
 
-        // 输入框回车键
         binding.editTextUrl.setOnEditorActionListener { _, actionId, event ->
             val isEnterKey = event?.keyCode == KeyEvent.KEYCODE_ENTER
                     && event.action == KeyEvent.ACTION_DOWN
@@ -425,50 +414,49 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             }
         }
 
-        // 书签按钮：单击切换收藏状态
         binding.buttonBookmark.setOnClickListener {
             toggleBookmark()
         }
 
-        // 书签按钮：长按显示书签列表
         binding.buttonBookmark.setOnLongClickListener {
             showBookmarkSheet()
             true
         }
 
-        // PC 模式按钮
         binding.buttonPcMode.setOnClickListener {
             togglePcMode()
         }
 
-        // 后退按钮
         binding.buttonBack.setOnClickListener {
             if (binding.webView.canGoBack()) {
                 binding.webView.goBack()
             }
         }
 
-        // 前进按钮
         binding.buttonForward.setOnClickListener {
             if (binding.webView.canGoForward()) {
                 binding.webView.goForward()
             }
         }
 
-        // 刷新按钮：单击刷新
         binding.buttonRefresh.setOnClickListener {
             performRefresh()
         }
 
-        // 刷新按钮：长按显示设置
         binding.buttonRefresh.setOnLongClickListener {
             showRefreshSheet()
             true
         }
 
-        // 截图按钮
+        // 截图按钮：短按截取当前可见区域
         binding.buttonCapture.setOnClickListener {
-            performCapture()
+            captureVisibleArea()
+        }
+
+        // 截图按钮：长按截取完整网页
+        binding.buttonCapture.setOnLongClickListener {
+            captureWholePage()
+            true
         }
     }
 
@@ -534,7 +522,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     }
 
     private fun showBookmarkSheet() {
-        // 使用自定义主题
         val bottomSheet = BottomSheetDialog(this, R.style.Theme_WebSnap_BottomSheet)
         val sheetBinding = BottomSheetBookmarksBinding.inflate(layoutInflater)
         bottomSheet.setContentView(sheetBinding.root)
@@ -596,13 +583,11 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             webSettings.userAgentString = desktopUserAgent
             webSettings.useWideViewPort = true
             webSettings.loadWithOverviewMode = false
-
             showToast(getString(R.string.toast_pc_mode_on))
         } else {
             webSettings.userAgentString = mobileUserAgent
             webSettings.useWideViewPort = true
             webSettings.loadWithOverviewMode = true
-
             showToast(getString(R.string.toast_pc_mode_off))
         }
 
@@ -627,14 +612,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         binding.webView.reload()
     }
 
-    /**
-     * 更新刷新按钮状态（文字和激活状态）
-     */
     private fun updateRefreshButtonState() {
         val service = refreshService
 
         if (service != null && service.hasActiveTask()) {
-            // 有活动任务：设置激活状态
             binding.buttonRefresh.isActivated = true
 
             val task = service.getCurrentTask()
@@ -660,22 +641,16 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 }
             }
         } else {
-            // 无活动任务：恢复默认状态
             binding.buttonRefresh.isActivated = false
             binding.buttonRefresh.text = getString(R.string.button_refresh_default)
         }
     }
 
-    /**
-     * 显示刷新设置 BottomSheet
-     */
     private fun showRefreshSheet() {
-        // 使用自定义主题
         val bottomSheet = BottomSheetDialog(this, R.style.Theme_WebSnap_BottomSheet)
         val sheetBinding = BottomSheetRefreshBinding.inflate(layoutInflater)
         bottomSheet.setContentView(sheetBinding.root)
 
-        // 设置间隔选项 Spinner
         val intervalOptions = resources.getStringArray(R.array.interval_options)
         val intervalValues = resources.getIntArray(R.array.interval_values)
         val spinnerAdapter = ArrayAdapter(
@@ -686,28 +661,23 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         }
         sheetBinding.spinnerInterval.adapter = spinnerAdapter
-        sheetBinding.spinnerInterval.setSelection(4) // 默认选择 5 分钟
+        sheetBinding.spinnerInterval.setSelection(4)
 
-        // 重置选中状态
         selectedScheduledTime = null
         customIntervalSeconds = null
 
-        // 自定义间隔按钮
         sheetBinding.buttonCustomInterval.setOnClickListener {
             showCustomIntervalDialog { seconds ->
                 customIntervalSeconds = seconds
-                // 自动选中间隔刷新
                 sheetBinding.radioInterval.isChecked = true
                 showToast("已设置自定义间隔: ${getIntervalDisplayText(seconds)}")
             }
         }
 
-        // 时间选择按钮
         sheetBinding.buttonPickTime.setOnClickListener {
             showTimePicker(sheetBinding)
         }
 
-        // RadioButton 互斥逻辑
         sheetBinding.radioInterval.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
                 sheetBinding.radioScheduled.isChecked = false
@@ -723,15 +693,12 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 sheetBinding.containerInterval.alpha = 0.5f
                 sheetBinding.buttonCustomInterval.alpha = 0.5f
                 sheetBinding.containerScheduled.alpha = 1f
-                // 清除自定义间隔
                 customIntervalSeconds = null
             }
         }
 
-        // 默认选中间隔刷新
         sheetBinding.radioInterval.isChecked = true
 
-        // 显示当前任务状态
         val service = refreshService
         if (service != null && service.hasActiveTask()) {
             sheetBinding.containerCurrentTask.visibility = View.VISIBLE
@@ -766,7 +733,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             sheetBinding.buttonCancelTask.visibility = View.GONE
         }
 
-        // 取消任务按钮
         sheetBinding.buttonCancelTask.setOnClickListener {
             refreshService?.stopTask()
             stopRefreshService()
@@ -774,11 +740,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             bottomSheet.dismiss()
         }
 
-        // 确认按钮
         sheetBinding.buttonConfirm.setOnClickListener {
             when {
                 sheetBinding.radioInterval.isChecked -> {
-                    // 优先使用自定义间隔
                     val seconds = customIntervalSeconds
                         ?: intervalValues[sheetBinding.spinnerInterval.selectedItemPosition].toLong()
 
@@ -811,9 +775,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         bottomSheet.show()
     }
 
-    /**
-     * 显示自定义间隔对话框
-     */
     private fun showCustomIntervalDialog(onConfirm: (Long) -> Unit) {
         val dialogView = LayoutInflater.from(this)
             .inflate(R.layout.dialog_custom_interval, null)
@@ -824,7 +785,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         val buttonCancel = dialogView.findViewById<Button>(R.id.buttonCancel)
         val buttonOk = dialogView.findViewById<Button>(R.id.buttonOk)
 
-        // 设置默认值
         editHours.setText("0")
         editMinutes.setText("5")
         editSeconds.setText("0")
@@ -834,7 +794,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             .setCancelable(true)
             .create()
 
-        // 设置对话框背景透明，以显示自定义圆角背景
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
 
         buttonCancel.setOnClickListener {
@@ -860,16 +819,11 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         dialog.show()
     }
 
-    /**
-     * 显示时间选择器（应用圆角主题）
-     */
     private fun showTimePicker(sheetBinding: BottomSheetRefreshBinding) {
         val calendar = Calendar.getInstance()
-
         val hour = calendar.get(Calendar.HOUR_OF_DAY)
         val minute = calendar.get(Calendar.MINUTE)
 
-        // 使用自定义主题
         TimePickerDialog(
             this,
             R.style.Theme_WebSnap_TimePicker,
@@ -882,9 +836,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         ).show()
     }
 
-    /**
-     * 显示秒选择器（应用圆角主题）
-     */
     private fun showSecondPicker(
         sheetBinding: BottomSheetRefreshBinding,
         hour: Int,
@@ -893,7 +844,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         val seconds = arrayOf("00", "15", "30", "45")
         val secondValues = intArrayOf(0, 15, 30, 45)
 
-        // 使用自定义主题
         AlertDialog.Builder(this, R.style.Theme_WebSnap_SecondPicker)
             .setTitle("选择秒数")
             .setItems(seconds) { _, which ->
@@ -918,9 +868,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             .show()
     }
 
-    /**
-     * 启动间隔刷新
-     */
     private fun startIntervalRefresh(intervalSeconds: Long) {
         val intent = Intent(this, RefreshService::class.java).apply {
             action = RefreshService.ACTION_START_TASK
@@ -935,9 +882,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         }
     }
 
-    /**
-     * 启动定时刷新
-     */
     private fun startScheduledRefresh(targetTimeMillis: Long) {
         val intent = Intent(this, RefreshService::class.java).apply {
             action = RefreshService.ACTION_START_TASK
@@ -952,9 +896,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         }
     }
 
-    /**
-     * 停止刷新服务
-     */
     private fun stopRefreshService() {
         val intent = Intent(this, RefreshService::class.java).apply {
             action = RefreshService.ACTION_STOP_TASK
@@ -1011,9 +952,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         formatSeconds(remainingSeconds)
                     )
                 }
-                is RefreshTask.Scheduled -> {
-                    // 定时模式显示目标时间，不变
-                }
+                is RefreshTask.Scheduled -> {}
                 null -> {}
             }
         }
@@ -1060,7 +999,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     // 截图功能
     // ═══════════════════════════════════════════════════════════════
 
-    private fun performCapture() {
+    /**
+     * 短按：截取当前可见区域
+     */
+    private fun captureVisibleArea() {
         if (!isPageLoaded) {
             showToast(getString(R.string.toast_page_not_loaded))
             return
@@ -1070,17 +1012,12 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
         binding.webView.post {
             try {
-                val bitmap = captureWebViewToBitmap()
+                val bitmap = captureVisibleBitmap()
 
                 if (bitmap != null) {
-                    val saved = saveBitmapToGallery(bitmap)
-                    bitmap.recycle()
-
-                    if (saved) {
-                        showToast(getString(R.string.toast_capture_success))
-                    } else {
-                        showToast(getString(R.string.toast_capture_failed))
-                    }
+                    CropBitmapHolder.set(bitmap, isFullPage = false)
+                    showToast(getString(R.string.toast_capture_visible))
+                    startActivity(Intent(this, CropActivity::class.java))
                 } else {
                     showToast(getString(R.string.toast_capture_failed))
                 }
@@ -1099,7 +1036,67 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         }
     }
 
-    private fun captureWebViewToBitmap(): Bitmap? {
+    /**
+     * 长按：截取完整网页
+     */
+    private fun captureWholePage() {
+        if (!isPageLoaded) {
+            showToast(getString(R.string.toast_page_not_loaded))
+            return
+        }
+
+        binding.buttonCapture.isEnabled = false
+
+        binding.webView.post {
+            try {
+                val bitmap = captureFullPageBitmap()
+
+                if (bitmap != null) {
+                    CropBitmapHolder.set(bitmap, isFullPage = true)
+                    showToast(getString(R.string.toast_capture_fullpage))
+                    startActivity(Intent(this, CropActivity::class.java))
+                } else {
+                    showToast(getString(R.string.toast_capture_failed))
+                }
+
+            } catch (e: OutOfMemoryError) {
+                showToast(getString(R.string.toast_memory_insufficient))
+                System.gc()
+
+            } catch (e: Exception) {
+                showToast(getString(R.string.toast_capture_failed))
+                e.printStackTrace()
+
+            } finally {
+                binding.buttonCapture.isEnabled = true
+            }
+        }
+    }
+
+    /**
+     * 截取当前可见区域的 Bitmap
+     */
+    private fun captureVisibleBitmap(): Bitmap? {
+        val webView = binding.webView
+
+        val width = webView.width
+        val height = webView.height
+
+        if (width <= 0 || height <= 0) {
+            return null
+        }
+
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        webView.draw(canvas)
+
+        return bitmap
+    }
+
+    /**
+     * 截取完整网页的 Bitmap（长截图）
+     */
+    private fun captureFullPageBitmap(): Bitmap? {
         val webView = binding.webView
 
         @Suppress("DEPRECATION")
@@ -1149,72 +1146,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         }
 
         return bitmap
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // 图片保存
-    // ═══════════════════════════════════════════════════════════════
-
-    private fun saveBitmapToGallery(bitmap: Bitmap): Boolean {
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
-            .format(Date())
-        val filename = "WebSnap_$timestamp.png"
-
-        val contentValues = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, filename)
-            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-            put(MediaStore.Images.Media.DATE_ADDED, System.currentTimeMillis() / 1000)
-            put(MediaStore.Images.Media.DATE_MODIFIED, System.currentTimeMillis() / 1000)
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(
-                    MediaStore.Images.Media.RELATIVE_PATH,
-                    "${Environment.DIRECTORY_PICTURES}/WebSnap"
-                )
-                put(MediaStore.Images.Media.IS_PENDING, 1)
-            }
-        }
-
-        val resolver = contentResolver
-        var imageUri: Uri? = null
-
-        return try {
-            imageUri = resolver.insert(
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                contentValues
-            ) ?: throw IOException("Failed to create MediaStore entry")
-
-            resolver.openOutputStream(imageUri)?.use { outputStream ->
-                val compressed = bitmap.compress(
-                    Bitmap.CompressFormat.PNG,
-                    100,
-                    outputStream
-                )
-                if (!compressed) {
-                    throw IOException("Failed to compress bitmap")
-                }
-            } ?: throw IOException("Failed to open output stream")
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                contentValues.clear()
-                contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
-                resolver.update(imageUri, contentValues, null, null)
-            }
-
-            true
-
-        } catch (e: Exception) {
-            e.printStackTrace()
-
-            imageUri?.let {
-                try {
-                    resolver.delete(it, null, null)
-                } catch (ignored: Exception) {
-                }
-            }
-
-            false
-        }
     }
 
     // ═══════════════════════════════════════════════════════════════
