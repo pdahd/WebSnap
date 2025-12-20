@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
@@ -48,7 +49,7 @@ class CropOverlayView @JvmOverloads constructor(
         private const val CORNER_LENGTH_DP = 28f
 
         /** 角手柄宽度 (dp) - 加粗 */
-        private const val CORNER_WIDTH_DP = 8f
+        private const val CORNER_WIDTH_DP = 6f
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -100,6 +101,9 @@ class CropOverlayView @JvmOverloads constructor(
     /** 裁剪框变化监听器 */
     private var onCropRectChangeListener: OnCropRectChangeListener? = null
 
+    /** 用于绘制 L 型角手柄的 Path */
+    private val cornerPath = Path()
+
     // ═══════════════════════════════════════════════════════════════
     // 画笔
     // ═══════════════════════════════════════════════════════════════
@@ -117,12 +121,13 @@ class CropOverlayView @JvmOverloads constructor(
         isAntiAlias = true
     }
 
-    /** 角手柄画笔（红色加粗） */
+    /** 角手柄画笔（红色加粗，圆润转角） */
     private val cornerPaint = Paint().apply {
         color = Color.parseColor("#FF0000")
         style = Paint.Style.STROKE
         isAntiAlias = true
-        strokeCap = Paint.Cap.SQUARE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
     }
 
     /** 网格线画笔（半透明白色，保持不变） */
@@ -227,10 +232,10 @@ class CropOverlayView @JvmOverloads constructor(
         // 2. 绘制网格线
         drawGrid(canvas)
 
-        // 3. 绘制边框
+        // 3. 绘制白色边框（先绘制，在下层）
         canvas.drawRect(cropRect, borderPaint)
 
-        // 4. 绘制四个角手柄（红色加粗）
+        // 4. 绘制红色角手柄（后绘制，盖住白色边框顶点）
         drawCorners(canvas)
     }
 
@@ -277,56 +282,34 @@ class CropOverlayView @JvmOverloads constructor(
         )
     }
 
+    /**
+     * 绘制四个角的 L 型手柄
+     * 使用 Path 绘制连续路径，确保转角圆润且精准对齐
+     */
     private fun drawCorners(canvas: Canvas) {
-        val halfWidth = cornerWidth / 2f
+        cornerPath.reset()
 
-        // 左上角
-        canvas.drawLine(
-            cropRect.left - halfWidth, cropRect.top,
-            cropRect.left + cornerLength, cropRect.top,
-            cornerPaint
-        )
-        canvas.drawLine(
-            cropRect.left, cropRect.top - halfWidth,
-            cropRect.left, cropRect.top + cornerLength,
-            cornerPaint
-        )
+        // 左上角 L 型：从下往上，再往右
+        cornerPath.moveTo(cropRect.left, cropRect.top + cornerLength)
+        cornerPath.lineTo(cropRect.left, cropRect.top)
+        cornerPath.lineTo(cropRect.left + cornerLength, cropRect.top)
 
-        // 右上角
-        canvas.drawLine(
-            cropRect.right + halfWidth, cropRect.top,
-            cropRect.right - cornerLength, cropRect.top,
-            cornerPaint
-        )
-        canvas.drawLine(
-            cropRect.right, cropRect.top - halfWidth,
-            cropRect.right, cropRect.top + cornerLength,
-            cornerPaint
-        )
+        // 右上角 L 型：从左往右，再往下
+        cornerPath.moveTo(cropRect.right - cornerLength, cropRect.top)
+        cornerPath.lineTo(cropRect.right, cropRect.top)
+        cornerPath.lineTo(cropRect.right, cropRect.top + cornerLength)
 
-        // 左下角
-        canvas.drawLine(
-            cropRect.left - halfWidth, cropRect.bottom,
-            cropRect.left + cornerLength, cropRect.bottom,
-            cornerPaint
-        )
-        canvas.drawLine(
-            cropRect.left, cropRect.bottom + halfWidth,
-            cropRect.left, cropRect.bottom - cornerLength,
-            cornerPaint
-        )
+        // 左下角 L 型：从上往下，再往右
+        cornerPath.moveTo(cropRect.left, cropRect.bottom - cornerLength)
+        cornerPath.lineTo(cropRect.left, cropRect.bottom)
+        cornerPath.lineTo(cropRect.left + cornerLength, cropRect.bottom)
 
-        // 右下角
-        canvas.drawLine(
-            cropRect.right + halfWidth, cropRect.bottom,
-            cropRect.right - cornerLength, cropRect.bottom,
-            cornerPaint
-        )
-        canvas.drawLine(
-            cropRect.right, cropRect.bottom + halfWidth,
-            cropRect.right, cropRect.bottom - cornerLength,
-            cornerPaint
-        )
+        // 右下角 L 型：从左往右，再往上
+        cornerPath.moveTo(cropRect.right - cornerLength, cropRect.bottom)
+        cornerPath.lineTo(cropRect.right, cropRect.bottom)
+        cornerPath.lineTo(cropRect.right, cropRect.bottom - cornerLength)
+
+        canvas.drawPath(cornerPath, cornerPaint)
     }
 
     // ═══════════════════════════════════════════════════════════════
