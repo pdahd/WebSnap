@@ -1,7 +1,7 @@
 name: Pack Codebase for AI
 
 on:
-  workflow_dispatch: # 允许你手动点击运行
+  workflow_dispatch: 
 
 jobs:
   pack:
@@ -16,12 +16,17 @@ jobs:
           node-version: '20'
 
       - name: Run Repomix
-        # npx repomix --include 指定只打包源码，避免混入 build 等垃圾文件
-        # 它会自动忽略 .gitignore 里的内容（比如 build 文件夹）
-        run: npx repomix --include "app/src/main,build.gradle,settings.gradle"
+        # --yes 是为了跳过确认提示
+        # --output 强制指定输出文件名
+        # 不使用 --include，让它根据默认规则（自动忽略.git和build目录）打包整个项目
+        run: npx repomix --yes --output my-project-for-ai.txt
+
+      - name: Check if file exists
+        # 这一步是为了在日志里看一眼文件到底生成没
+        run: ls -lh my-project-for-ai.txt
 
       - name: Upload result
         uses: actions/upload-artifact@v4
         with:
           name: project-pack-for-ai
-          path: repomix-output.txt
+          path: my-project-for-ai.txt
