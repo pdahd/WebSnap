@@ -39,6 +39,10 @@
     <string name="toast_memory_insufficient">内存不足，无法截取此页面</string>
     <string name="toast_loading">正在加载…</string>
 
+    <!-- 截图功能 -->
+    <string name="toast_capture_visible">已截取当前屏幕</string>
+    <string name="toast_capture_fullpage">已截取完整网页</string>
+
     <!-- PC 模式 -->
     <string name="toast_pc_mode_on">已切换到桌面模式，可双指缩放</string>
     <string name="toast_pc_mode_off">已切换到移动模式</string>
@@ -100,6 +104,18 @@
     <string name="dialog_button_cancel">取消</string>
     <string name="dialog_button_ok">确定</string>
     <string name="toast_invalid_interval">请输入有效的时间间隔</string>
+
+    <!-- 裁剪界面 -->
+    <string name="crop_title">裁剪图片</string>
+    <string name="crop_hint">拖动边缘调整区域</string>
+    <string name="crop_button_cancel">取消</string>
+    <string name="crop_button_reset">重置</string>
+    <string name="crop_button_save">✓ 保存</string>
+    <string name="toast_crop_saved">裁剪后的图片已保存</string>
+    <string name="toast_crop_failed">保存失败，请重试</string>
+    <string name="toast_crop_cancelled">已取消</string>
+    <string name="toast_crop_no_image">没有可裁剪的图片</string>
+    <string name="toast_crop_area_too_small">裁剪区域太小</string>
 
     <!-- WebView 错误 -->
     <string name="error_page_title">加载失败</string>
