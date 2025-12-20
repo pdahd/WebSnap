@@ -38,6 +38,13 @@
             </intent-filter>
         </activity>
 
+        <!-- 裁剪 Activity -->
+        <activity
+            android:name=".CropActivity"
+            android:exported="false"
+            android:theme="@style/Theme.WebSnap.Crop"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
         <!-- 自动刷新前台服务 -->
         <service
             android:name=".RefreshService"
