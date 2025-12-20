@@ -16,14 +16,9 @@ jobs:
           node-version: '20'
 
       - name: Run Repomix
-        # --yes 是为了跳过确认提示
-        # --output 强制指定输出文件名
-        # 不使用 --include，让它根据默认规则（自动忽略.git和build目录）打包整个项目
-        run: npx repomix --yes --output my-project-for-ai.txt
-
-      - name: Check if file exists
-        # 这一步是为了在日志里看一眼文件到底生成没
-        run: ls -lh my-project-for-ai.txt
+        # 删除了 --yes 参数
+        # 如果你想打包更全，可以直接用 npx repomix
+        run: npx repomix --output my-project-for-ai.txt
 
       - name: Upload result
         uses: actions/upload-artifact@v4
