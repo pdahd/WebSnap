@@ -2,6 +2,7 @@ name: Android CI
 
 on:
   push:
+    # 将 feature-crop 加入监控名单
     branches: [ "main", "master", "feature-crop" ]
   pull_request:
     branches: [ "main", "master", "feature-crop" ]
@@ -31,7 +32,6 @@ jobs:
 
       # ============================================
       # 步骤 3: 设置 Gradle（无需 wrapper）
-      # 此 Action 会自动下载指定版本的 Gradle
       # ============================================
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -69,4 +69,3 @@ jobs:
           echo "✅ Build completed successfully!"
           echo "📦 APK files:"
           ls -lh app/build/outputs/apk/debug/
-          
