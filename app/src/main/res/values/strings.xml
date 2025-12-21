@@ -119,6 +119,18 @@
     <string name="toast_crop_no_image">没有可裁剪的图片</string>
     <string name="toast_crop_area_too_small">裁剪区域太小</string>
 
+    <!-- 权限相关 -->
+    <string name="toast_permission_camera_denied">相机权限被拒绝</string>
+    <string name="toast_permission_mic_denied">麦克风权限被拒绝</string>
+    <string name="toast_permission_storage_denied">存储权限被拒绝</string>
+    <string name="toast_permission_required">需要权限才能继续</string>
+
+    <!-- 文件选择 -->
+    <string name="file_chooser_title">选择文件</string>
+    <string name="file_chooser_camera">拍照</string>
+    <string name="file_chooser_gallery">相册</string>
+    <string name="file_chooser_file">文件</string>
+
     <!-- WebView 错误 -->
     <string name="error_page_title">加载失败</string>
     <string name="error_page_message">无法加载此页面\n%1$s</string>
