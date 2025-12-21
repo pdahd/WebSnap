@@ -17,6 +17,10 @@
             overflow: hidden;
             background: #000000;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            /* 防止触摸时的默认行为 */
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         /* 粒子画布 - 全屏背景 */
@@ -29,7 +33,7 @@
             z-index: 1;
         }
 
-        /* 内容层 */
+        /* 内容层 - 允许触摸穿透 */
         .content {
             position: relative;
             z-index: 10;
@@ -40,6 +44,7 @@
             justify-content: center;
             align-items: center;
             padding: 40px 20px;
+            pointer-events: none;
         }
 
         /* 主标题 */
@@ -117,6 +122,7 @@
             transform: translateX(-50%);
         }
 
+        /* GitHub 链接 - 恢复可点击 */
         .github-link {
             display: flex;
             align-items: center;
@@ -126,6 +132,7 @@
             font-size: 11px;
             letter-spacing: 0.03em;
             transition: color 0.3s ease;
+            pointer-events: auto;
         }
 
         .github-link:hover,
@@ -190,12 +197,20 @@
             gravityStrength: 0.00003,
             initialSpeed: 0.3,
             damping: 0.9995,
-            trailAlpha: 0.08
+            trailAlpha: 0.08,
+            // 触摸排斥参数
+            repelRadius: 150,
+            repelStrength: 0.8
         };
 
         // 粒子数组
         let particles = [];
         let centerX, centerY;
+
+        // 触摸/鼠标位置
+        let pointerX = -1000;
+        let pointerY = -1000;
+        let isPointerActive = false;
 
         // 初始化画布尺寸
         function resizeCanvas() {
@@ -237,17 +252,30 @@
 
         // 更新粒子位置
         function updateParticle(p) {
-            // 计算到中心的距离和方向
-            const dx = centerX - p.x;
-            const dy = centerY - p.y;
-            const distSq = dx * dx + dy * dy;
-            const dist = Math.sqrt(distSq);
+            // 计算到中心的距离和方向（引力）
+            const dxCenter = centerX - p.x;
+            const dyCenter = centerY - p.y;
+            const distCenterSq = dxCenter * dxCenter + dyCenter * dyCenter;
+            const distCenter = Math.sqrt(distCenterSq);
 
             // 引力加速度（F = G / r²）
-            if (dist > 10) {
-                const force = CONFIG.gravityStrength * distSq / dist;
-                p.vx += (dx / dist) * force;
-                p.vy += (dy / dist) * force;
+            if (distCenter > 10) {
+                const force = CONFIG.gravityStrength * distCenterSq / distCenter;
+                p.vx += (dxCenter / distCenter) * force;
+                p.vy += (dyCenter / distCenter) * force;
+            }
+
+            // 触摸排斥效果
+            if (isPointerActive) {
+                const dxPointer = p.x - pointerX;
+                const dyPointer = p.y - pointerY;
+                const distPointer = Math.sqrt(dxPointer * dxPointer + dyPointer * dyPointer);
+                
+                if (distPointer < CONFIG.repelRadius && distPointer > 0) {
+                    const repelForce = (CONFIG.repelRadius - distPointer) / CONFIG.repelRadius * CONFIG.repelStrength;
+                    p.vx += (dxPointer / distPointer) * repelForce;
+                    p.vy += (dyPointer / distPointer) * repelForce;
+                }
             }
 
             // 应用阻尼
@@ -302,29 +330,65 @@
             requestAnimationFrame(animate);
         }
 
-        // 触摸/鼠标交互 - 排斥效果
-        function handleInteraction(x, y) {
-            particles.forEach(p => {
-                const dx = p.x - x;
-                const dy = p.y - y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                
-                if (dist < 150 && dist > 0) {
-                    const force = (150 - dist) / 150 * 0.5;
-                    p.vx += (dx / dist) * force;
-                    p.vy += (dy / dist) * force;
-                }
-            });
+        // ═══════════════════════════════════════════════════════════════
+        // 触摸/鼠标交互 - 绑定到 document 实现全屏响应
+        // ═══════════════════════════════════════════════════════════════
+
+        function handlePointerStart(x, y) {
+            pointerX = x;
+            pointerY = y;
+            isPointerActive = true;
         }
 
-        canvas.addEventListener('touchmove', (e) => {
+        function handlePointerMove(x, y) {
+            pointerX = x;
+            pointerY = y;
+            isPointerActive = true;
+        }
+
+        function handlePointerEnd() {
+            isPointerActive = false;
+            pointerX = -1000;
+            pointerY = -1000;
+        }
+
+        // 触摸事件
+        document.addEventListener('touchstart', (e) => {
+            const touch = e.touches[0];
+            handlePointerStart(touch.clientX, touch.clientY);
+        }, { passive: true });
+
+        document.addEventListener('touchmove', (e) => {
             e.preventDefault();
             const touch = e.touches[0];
-            handleInteraction(touch.clientX, touch.clientY);
+            handlePointerMove(touch.clientX, touch.clientY);
         }, { passive: false });
 
-        canvas.addEventListener('mousemove', (e) => {
-            handleInteraction(e.clientX, e.clientY);
+        document.addEventListener('touchend', () => {
+            handlePointerEnd();
+        }, { passive: true });
+
+        document.addEventListener('touchcancel', () => {
+            handlePointerEnd();
+        }, { passive: true });
+
+        // 鼠标事件（用于桌面调试）
+        document.addEventListener('mousedown', (e) => {
+            handlePointerStart(e.clientX, e.clientY);
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isPointerActive) {
+                handlePointerMove(e.clientX, e.clientY);
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            handlePointerEnd();
+        });
+
+        document.addEventListener('mouseleave', () => {
+            handlePointerEnd();
         });
 
         // 窗口大小变化时重新初始化
@@ -332,7 +396,10 @@
             resizeCanvas();
         });
 
+        // ═══════════════════════════════════════════════════════════════
         // 启动
+        // ═══════════════════════════════════════════════════════════════
+
         resizeCanvas();
         initParticles();
 
