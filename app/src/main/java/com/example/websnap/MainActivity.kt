@@ -18,6 +18,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -274,6 +275,14 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             webViewClient = createWebViewClient()
             webChromeClient = createWebChromeClient()
         }
+
+        // ═══════════════════════════════════════════════════════════
+        // Cookie 管理配置
+        // 启用第三方 Cookie，解决 Firebase Studio 等复杂云服务的兼容性问题
+        // ═══════════════════════════════════════════════════════════
+        val cookieManager = CookieManager.getInstance()
+        cookieManager.setAcceptCookie(true)
+        cookieManager.setAcceptThirdPartyCookies(binding.webView, true)
     }
 
     private fun createWebViewClient(): WebViewClient {
@@ -315,6 +324,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 binding.buttonCapture.isEnabled = true
                 updateNavigationButtons()
                 updateBookmarkButton()
+
+                // 确保 Cookie 被持久化
+                CookieManager.getInstance().flush()
 
                 // 本地页面不注入桌面模式脚本
                 if (isPcMode && view != null && url?.startsWith("file:") != true) {
