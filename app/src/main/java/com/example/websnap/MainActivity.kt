@@ -15,9 +15,7 @@ import android.graphics.Canvas
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.os.IBinder
-import android.provider.MediaStore
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
@@ -41,14 +39,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.websnap.databinding.ActivityMainBinding
 import com.example.websnap.databinding.BottomSheetBookmarksBinding
 import com.example.websnap.databinding.BottomSheetRefreshBinding
 import com.google.android.material.bottomsheet.BottomSheetDialog
-import java.io.File
-import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -135,7 +130,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     companion object {
         private const val PERMISSION_REQUEST_CAMERA = 1001
         private const val PERMISSION_REQUEST_MICROPHONE = 1002
-        private const val PERMISSION_REQUEST_STORAGE = 1003
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -150,12 +144,19 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private var currentPageTitle: String = ""
 
     // ═══════════════════════════════════════════════════════════════
-    // 文件上传相关
+    // 文件上传相关 - 必须在类级别初始化 ActivityResultLauncher
     // ═══════════════════════════════════════════════════════════════
 
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
-    private var cameraPhotoUri: Uri? = null
-    private lateinit var fileChooserLauncher: ActivityResultLauncher<Intent>
+
+    /**
+     * 文件选择器启动器
+     * 注意：必须作为类成员变量在 Activity 创建前注册，否则会导致崩溃
+     */
+    private val fileChooserLauncher: ActivityResultLauncher<Intent> =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            handleFileChooserResult(result.resultCode, result.data)
+        }
 
     // ═══════════════════════════════════════════════════════════════
     // WebView 权限请求相关
@@ -211,7 +212,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
         bookmarkManager = BookmarkManager.getInstance(this)
 
-        setupFileChooserLauncher()
         setupWebView()
         setupListeners()
         updateNavigationButtons()
@@ -247,6 +247,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     }
 
     override fun onDestroy() {
+        // 确保取消任何挂起的文件上传回调
+        fileUploadCallback?.onReceiveValue(null)
+        fileUploadCallback = null
+
         if (isServiceBound) {
             refreshService?.setCallback(null)
             unbindService(serviceConnection)
@@ -287,34 +291,86 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // 文件选择器初始化
+    // 文件上传处理
     // ═══════════════════════════════════════════════════════════════
 
-    private fun setupFileChooserLauncher() {
-        fileChooserLauncher = registerForActivityResult(
-            ActivityResultContracts.StartActivityForResult()
-        ) { result ->
-            handleFileChooserResult(result.resultCode, result.data)
-        }
-    }
-
+    /**
+     * 处理文件选择结果
+     */
     private fun handleFileChooserResult(resultCode: Int, data: Intent?) {
-        if (fileUploadCallback == null) return
+        val callback = fileUploadCallback
+        fileUploadCallback = null
 
+        if (callback == null) {
+            return
+        }
+
+        if (resultCode != Activity.RESULT_OK) {
+            // 用户取消选择
+            callback.onReceiveValue(null)
+            return
+        }
+
+        // 解析选择的文件
         val results: Array<Uri>? = when {
-            resultCode != Activity.RESULT_OK -> null
-            data?.data != null -> arrayOf(data.data!!)
+            // 单个文件
+            data?.data != null -> {
+                arrayOf(data.data!!)
+            }
+            // 多个文件
             data?.clipData != null -> {
                 val clipData = data.clipData!!
-                Array(clipData.itemCount) { clipData.getItemAt(it).uri }
+                Array(clipData.itemCount) { i ->
+                    clipData.getItemAt(i).uri
+                }
             }
-            cameraPhotoUri != null -> arrayOf(cameraPhotoUri!!)
             else -> null
         }
 
-        fileUploadCallback?.onReceiveValue(results)
-        fileUploadCallback = null
-        cameraPhotoUri = null
+        callback.onReceiveValue(results)
+    }
+
+    /**
+     * 启动系统文件选择器
+     * 直接使用 Android 系统的统一文件选择界面
+     */
+    private fun launchSystemFilePicker(params: WebChromeClient.FileChooserParams?) {
+        try {
+            // 获取网页请求的文件类型
+            val acceptTypes = params?.acceptTypes?.filter { it.isNotEmpty() }?.toTypedArray()
+                ?: arrayOf("*/*")
+
+            // 是否允许多选
+            val allowMultiple = params?.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE
+
+            // 创建文件选择 Intent
+            val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+
+                // 设置 MIME 类型
+                if (acceptTypes.size == 1) {
+                    type = acceptTypes[0]
+                } else {
+                    type = "*/*"
+                    putExtra(Intent.EXTRA_MIME_TYPES, acceptTypes)
+                }
+
+                // 允许多选
+                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple)
+            }
+
+            // 使用系统选择器包装
+            val chooserIntent = Intent.createChooser(intent, null)
+
+            fileChooserLauncher.launch(chooserIntent)
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // 发生异常时确保回调不会死锁
+            fileUploadCallback?.onReceiveValue(null)
+            fileUploadCallback = null
+            showToast(getString(R.string.toast_file_picker_error))
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -478,7 +534,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             }
 
             // ═══════════════════════════════════════════════════════════
-            // 文件上传处理
+            // 文件上传处理 - 直接调用系统文件选择器
             // ═══════════════════════════════════════════════════════════
 
             override fun onShowFileChooser(
@@ -486,17 +542,13 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 filePathCallback: ValueCallback<Array<Uri>>?,
                 fileChooserParams: FileChooserParams?
             ): Boolean {
-                // 取消之前的回调
+                // 取消之前未完成的回调，防止死锁
                 fileUploadCallback?.onReceiveValue(null)
                 fileUploadCallback = filePathCallback
 
-                // 检查并请求存储权限
-                if (!hasStoragePermission()) {
-                    requestStoragePermission()
-                    return true
-                }
+                // 直接启动系统文件选择器
+                launchSystemFilePicker(fileChooserParams)
 
-                showFileChooserDialog(fileChooserParams)
                 return true
             }
 
@@ -549,98 +601,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // 文件选择对话框
-    // ═══════════════════════════════════════════════════════════════
-
-    private fun showFileChooserDialog(params: WebChromeClient.FileChooserParams?) {
-        val acceptTypes = params?.acceptTypes ?: arrayOf("*/*")
-        val isImageRequest = acceptTypes.any { it.startsWith("image/") }
-        val isVideoRequest = acceptTypes.any { it.startsWith("video/") }
-        val isMediaRequest = isImageRequest || isVideoRequest
-
-        val options = mutableListOf<String>()
-        val intents = mutableListOf<Intent>()
-
-        // 相机选项（仅当请求图片或视频时）
-        if (isMediaRequest || acceptTypes.contains("*/*")) {
-            if (hasCameraPermission()) {
-                options.add(getString(R.string.file_chooser_camera))
-                intents.add(createCameraIntent())
-            }
-        }
-
-        // 相册选项
-        options.add(getString(R.string.file_chooser_gallery))
-        intents.add(createGalleryIntent(acceptTypes))
-
-        // 文件选项
-        options.add(getString(R.string.file_chooser_file))
-        intents.add(createFileIntent(acceptTypes, params?.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE))
-
-        if (options.size == 1) {
-            // 只有一个选项，直接打开
-            fileChooserLauncher.launch(intents[0])
-        } else {
-            // 多个选项，显示对话框
-            AlertDialog.Builder(this)
-                .setTitle(getString(R.string.file_chooser_title))
-                .setItems(options.toTypedArray()) { _, which ->
-                    fileChooserLauncher.launch(intents[which])
-                }
-                .setOnCancelListener {
-                    fileUploadCallback?.onReceiveValue(null)
-                    fileUploadCallback = null
-                }
-                .show()
-        }
-    }
-
-    private fun createCameraIntent(): Intent {
-        val photoFile = createImageFile()
-        cameraPhotoUri = FileProvider.getUriForFile(
-            this,
-            "${packageName}.fileprovider",
-            photoFile
-        )
-        return Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
-            putExtra(MediaStore.EXTRA_OUTPUT, cameraPhotoUri)
-        }
-    }
-
-    private fun createGalleryIntent(acceptTypes: Array<String>): Intent {
-        return Intent(Intent.ACTION_PICK).apply {
-            type = when {
-                acceptTypes.any { it.startsWith("image/") } -> "image/*"
-                acceptTypes.any { it.startsWith("video/") } -> "video/*"
-                else -> "*/*"
-            }
-        }
-    }
-
-    private fun createFileIntent(acceptTypes: Array<String>, allowMultiple: Boolean): Intent {
-        return Intent(Intent.ACTION_GET_CONTENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = if (acceptTypes.isNotEmpty() && acceptTypes[0] != "") {
-                acceptTypes[0]
-            } else {
-                "*/*"
-            }
-            if (acceptTypes.size > 1) {
-                putExtra(Intent.EXTRA_MIME_TYPES, acceptTypes)
-            }
-            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple)
-        }
-    }
-
-    @Throws(IOException::class)
-    private fun createImageFile(): File {
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        val storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES)
-            ?: cacheDir
-        return File.createTempFile("CAMERA_${timestamp}_", ".jpg", storageDir)
-    }
-
-    // ═══════════════════════════════════════════════════════════════
     // 权限检查与请求
     // ═══════════════════════════════════════════════════════════════
 
@@ -654,38 +614,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         return ContextCompat.checkSelfPermission(
             this, Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
-    }
-
-    private fun hasStoragePermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Android 13+ 使用细粒度权限
-            ContextCompat.checkSelfPermission(
-                this, Manifest.permission.READ_MEDIA_IMAGES
-            ) == PackageManager.PERMISSION_GRANTED
-        } else {
-            // Android 12 及以下
-            ContextCompat.checkSelfPermission(
-                this, Manifest.permission.READ_EXTERNAL_STORAGE
-            ) == PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    private fun requestStoragePermission() {
-        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(
-                Manifest.permission.READ_MEDIA_IMAGES,
-                Manifest.permission.READ_MEDIA_VIDEO,
-                Manifest.permission.READ_MEDIA_AUDIO
-            )
-        } else {
-            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-        }
-
-        ActivityCompat.requestPermissions(
-            this,
-            permissions,
-            PERMISSION_REQUEST_STORAGE
-        )
     }
 
     override fun onRequestPermissionsResult(
@@ -726,18 +654,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         request.deny()
                     }
                     pendingPermissionRequest = null
-                }
-            }
-
-            PERMISSION_REQUEST_STORAGE -> {
-                // 处理存储权限请求结果
-                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    // 权限授予，重新触发文件选择
-                    showFileChooserDialog(null)
-                } else {
-                    showToast(getString(R.string.toast_permission_storage_denied))
-                    fileUploadCallback?.onReceiveValue(null)
-                    fileUploadCallback = null
                 }
             }
         }
