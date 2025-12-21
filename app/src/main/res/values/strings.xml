@@ -15,6 +15,7 @@
     <!-- 底部按钮 -->
     <string name="button_back">&lt;</string>
     <string name="button_forward">&gt;</string>
+    <string name="button_home">🏠</string>
     <string name="button_capture_icon">📷</string>
     <string name="button_refresh_default">🔄 刷新</string>
     <string name="button_refresh_countdown">⏱️ %1$s</string>
@@ -24,6 +25,7 @@
     <!-- 无障碍描述 -->
     <string name="content_desc_back">后退</string>
     <string name="content_desc_forward">前进</string>
+    <string name="content_desc_home">主页</string>
     <string name="content_desc_bookmark">书签</string>
     <string name="content_desc_pc_mode">PC 模式</string>
     <string name="content_desc_capture">截图</string>
