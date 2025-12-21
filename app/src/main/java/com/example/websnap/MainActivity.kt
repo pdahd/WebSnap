@@ -144,14 +144,14 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private var currentPageTitle: String = ""
 
     // ═══════════════════════════════════════════════════════════════
-    // 文件上传相关 - 必须在类级别初始化 ActivityResultLauncher
+    // 文件上传相关
     // ═══════════════════════════════════════════════════════════════
 
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
 
     /**
      * 文件选择器启动器
-     * 注意：必须作为类成员变量在 Activity 创建前注册，否则会导致崩溃
+     * 必须作为类成员变量在 Activity 创建前注册
      */
     private val fileChooserLauncher: ActivityResultLauncher<Intent> =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -218,7 +218,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         updateBookmarkButton()
         updatePcModeButton()
 
-        // 启动时加载主页
         loadHomePage()
     }
 
@@ -247,7 +246,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     }
 
     override fun onDestroy() {
-        // 确保取消任何挂起的文件上传回调
         fileUploadCallback?.onReceiveValue(null)
         fileUploadCallback = null
 
@@ -306,18 +304,14 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         }
 
         if (resultCode != Activity.RESULT_OK) {
-            // 用户取消选择
             callback.onReceiveValue(null)
             return
         }
 
-        // 解析选择的文件
         val results: Array<Uri>? = when {
-            // 单个文件
             data?.data != null -> {
                 arrayOf(data.data!!)
             }
-            // 多个文件
             data?.clipData != null -> {
                 val clipData = data.clipData!!
                 Array(clipData.itemCount) { i ->
@@ -332,41 +326,42 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
     /**
      * 启动系统文件选择器
-     * 直接使用 Android 系统的统一文件选择界面
+     * 使用 ACTION_OPEN_DOCUMENT 打开完整的存储访问框架(SAF)界面
+     * 这样可以访问：内部存储、SD卡、下载文件夹、文档等所有位置
      */
     private fun launchSystemFilePicker(params: WebChromeClient.FileChooserParams?) {
         try {
-            // 获取网页请求的文件类型
-            val acceptTypes = params?.acceptTypes?.filter { it.isNotEmpty() }?.toTypedArray()
-                ?: arrayOf("*/*")
-
-            // 是否允许多选
             val allowMultiple = params?.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE
 
-            // 创建文件选择 Intent
-            val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            // 使用 ACTION_OPEN_DOCUMENT 获得完整的存储访问框架(SAF)
+            // 这会显示：内部存储、SD卡、下载、文档等所有入口
+            val documentIntent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
-
-                // 设置 MIME 类型
-                if (acceptTypes.size == 1) {
-                    type = acceptTypes[0]
-                } else {
-                    type = "*/*"
-                    putExtra(Intent.EXTRA_MIME_TYPES, acceptTypes)
-                }
-
+                // 使用 */* 显示所有文件类型，让网页端验证
+                type = "*/*"
                 // 允许多选
+                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple)
+                // 授予读取权限
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
+            // 同时创建 ACTION_GET_CONTENT 作为备选
+            val contentIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "*/*"
                 putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple)
             }
 
-            // 使用系统选择器包装
-            val chooserIntent = Intent.createChooser(intent, null)
+            // 使用 chooser 组合两种 Intent，让用户看到最完整的选项
+            val chooserIntent = Intent.createChooser(contentIntent, null).apply {
+                // 将 ACTION_OPEN_DOCUMENT 作为额外选项添加
+                putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(documentIntent))
+            }
 
             fileChooserLauncher.launch(chooserIntent)
 
         } catch (e: Exception) {
             e.printStackTrace()
-            // 发生异常时确保回调不会死锁
             fileUploadCallback?.onReceiveValue(null)
             fileUploadCallback = null
             showToast(getString(R.string.toast_file_picker_error))
@@ -395,8 +390,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 cacheMode = WebSettings.LOAD_DEFAULT
                 allowFileAccess = true
                 userAgentString = userAgentString.replace("; wv", "")
-
-                // 启用媒体播放
                 mediaPlaybackRequiresUserGesture = false
             }
 
@@ -405,7 +398,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             webChromeClient = createWebChromeClient()
         }
 
-        // Cookie 管理配置
         val cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(true)
         cookieManager.setAcceptThirdPartyCookies(binding.webView, true)
@@ -533,28 +525,18 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 currentPageTitle = title ?: ""
             }
 
-            // ═══════════════════════════════════════════════════════════
-            // 文件上传处理 - 直接调用系统文件选择器
-            // ═══════════════════════════════════════════════════════════
-
             override fun onShowFileChooser(
                 webView: WebView?,
                 filePathCallback: ValueCallback<Array<Uri>>?,
                 fileChooserParams: FileChooserParams?
             ): Boolean {
-                // 取消之前未完成的回调，防止死锁
                 fileUploadCallback?.onReceiveValue(null)
                 fileUploadCallback = filePathCallback
 
-                // 直接启动系统文件选择器
                 launchSystemFilePicker(fileChooserParams)
 
                 return true
             }
-
-            // ═══════════════════════════════════════════════════════════
-            // WebView 权限请求处理（相机、麦克风）
-            // ═══════════════════════════════════════════════════════════
 
             override fun onPermissionRequest(request: PermissionRequest?) {
                 request?.let { permRequest ->
@@ -579,11 +561,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                     }
 
                     if (permissionsToRequest.isEmpty()) {
-                        // 所有权限已授予
                         permRequest.grant(requestedResources)
                         pendingPermissionRequest = null
                     } else {
-                        // 请求权限
                         ActivityCompat.requestPermissions(
                             this@MainActivity,
                             permissionsToRequest.toTypedArray(),
@@ -625,7 +605,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
         when (requestCode) {
             PERMISSION_REQUEST_CAMERA, PERMISSION_REQUEST_MICROPHONE -> {
-                // 处理 WebView 权限请求结果
                 pendingPermissionRequest?.let { request ->
                     val grantedResources = mutableListOf<String>()
 
