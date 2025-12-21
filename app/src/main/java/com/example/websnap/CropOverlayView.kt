@@ -114,9 +114,9 @@ class CropOverlayView @JvmOverloads constructor(
         style = Paint.Style.FILL
     }
 
-    /** 边框画笔（白色细线，保持不变） */
+    /** 边框画笔（绿色线） */
     private val borderPaint = Paint().apply {
-        color = Color.WHITE
+        color = Color.GREEN
         style = Paint.Style.STROKE
         isAntiAlias = true
     }
