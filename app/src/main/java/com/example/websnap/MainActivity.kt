@@ -47,6 +47,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     // 常量配置
     // ═══════════════════════════════════════════════════════════════
 
+    private val homePageUrl = "file:///android_asset/home.html"
     private val maxCaptureHeight = 20000
     private val desktopViewportWidth = 1024
 
@@ -55,7 +56,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         "AppleWebKit/537.36 (KHTML, like Gecko) " +
         "Chrome/120.0.0.0 Safari/537.36"
 
-    private val webViewSchemes = setOf("http", "https", "about", "data", "javascript")
+    private val webViewSchemes = setOf("http", "https", "about", "data", "javascript", "file")
     private val systemSchemes = setOf("tel", "mailto", "sms")
 
     private val desktopModeScript: String
@@ -176,6 +177,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         updateNavigationButtons()
         updateBookmarkButton()
         updatePcModeButton()
+
+        // 启动时加载主页
+        loadHomePage()
     }
 
     override fun onStart() {
@@ -287,15 +291,19 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                     desktopModeAppliedForCurrentPage = false
                 }
 
-                url?.let {
-                    binding.editTextUrl.setText(it)
-                    binding.editTextUrl.setSelection(it.length)
+                // 不在地址栏显示本地主页 URL
+                if (url != null && !url.startsWith("file:")) {
+                    binding.editTextUrl.setText(url)
+                    binding.editTextUrl.setSelection(url.length)
+                } else if (url?.startsWith("file:") == true) {
+                    binding.editTextUrl.setText("")
                 }
 
                 updateNavigationButtons()
                 updateBookmarkButton()
 
-                if (isPcMode && view != null) {
+                // 本地页面不注入桌面模式脚本
+                if (isPcMode && view != null && url?.startsWith("file:") != true) {
                     view.evaluateJavascript(desktopModeScript, null)
                 }
             }
@@ -308,7 +316,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 updateNavigationButtons()
                 updateBookmarkButton()
 
-                if (isPcMode && view != null) {
+                // 本地页面不注入桌面模式脚本
+                if (isPcMode && view != null && url?.startsWith("file:") != true) {
                     handleDesktopModePageFinished(view)
                 }
             }
@@ -439,6 +448,11 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             }
         }
 
+        // 主页按钮
+        binding.buttonHome.setOnClickListener {
+            loadHomePage()
+        }
+
         binding.buttonRefresh.setOnClickListener {
             performRefresh()
         }
@@ -458,6 +472,15 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             captureWholePage()
             true
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 主页功能
+    // ═══════════════════════════════════════════════════════════════
+
+    private fun loadHomePage() {
+        binding.editTextUrl.setText("")
+        binding.webView.loadUrl(homePageUrl)
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -487,7 +510,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private fun updateBookmarkButton() {
         val currentUrl = binding.webView.url
 
-        val isBookmarked = if (!currentUrl.isNullOrBlank() && currentUrl != "about:blank") {
+        val isBookmarked = if (!currentUrl.isNullOrBlank() 
+            && currentUrl != "about:blank"
+            && !currentUrl.startsWith("file:")) {
             bookmarkManager.contains(currentUrl)
         } else {
             false
@@ -503,7 +528,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private fun toggleBookmark() {
         val currentUrl = binding.webView.url
 
-        if (currentUrl.isNullOrBlank() || currentUrl == "about:blank") {
+        if (currentUrl.isNullOrBlank() 
+            || currentUrl == "about:blank"
+            || currentUrl.startsWith("file:")) {
             showToast(getString(R.string.toast_bookmark_need_page))
             return
         }
@@ -592,7 +619,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         }
 
         val currentUrl = binding.webView.url
-        if (!currentUrl.isNullOrBlank() && currentUrl != "about:blank") {
+        if (!currentUrl.isNullOrBlank() 
+            && currentUrl != "about:blank"
+            && !currentUrl.startsWith("file:")) {
             binding.webView.reload()
         }
     }
