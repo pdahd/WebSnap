@@ -1,24 +1,31 @@
 package com.example.websnap
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.app.AlertDialog
 import android.app.TimePickerDialog
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.IBinder
+import android.provider.MediaStore
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.webkit.CookieManager
+import android.webkit.PermissionRequest
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -29,12 +36,19 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.websnap.databinding.ActivityMainBinding
 import com.example.websnap.databinding.BottomSheetBookmarksBinding
 import com.example.websnap.databinding.BottomSheetRefreshBinding
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import java.io.File
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -115,6 +129,16 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         """.trimIndent()
 
     // ═══════════════════════════════════════════════════════════════
+    // 权限请求码
+    // ═══════════════════════════════════════════════════════════════
+
+    companion object {
+        private const val PERMISSION_REQUEST_CAMERA = 1001
+        private const val PERMISSION_REQUEST_MICROPHONE = 1002
+        private const val PERMISSION_REQUEST_STORAGE = 1003
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // 状态变量
     // ═══════════════════════════════════════════════════════════════
 
@@ -124,6 +148,20 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private var desktopModeAppliedForCurrentPage = false
     private var currentLoadingUrl: String? = null
     private var currentPageTitle: String = ""
+
+    // ═══════════════════════════════════════════════════════════════
+    // 文件上传相关
+    // ═══════════════════════════════════════════════════════════════
+
+    private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
+    private var cameraPhotoUri: Uri? = null
+    private lateinit var fileChooserLauncher: ActivityResultLauncher<Intent>
+
+    // ═══════════════════════════════════════════════════════════════
+    // WebView 权限请求相关
+    // ═══════════════════════════════════════════════════════════════
+
+    private var pendingPermissionRequest: PermissionRequest? = null
 
     // ═══════════════════════════════════════════════════════════════
     // 书签相关
@@ -173,6 +211,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
         bookmarkManager = BookmarkManager.getInstance(this)
 
+        setupFileChooserLauncher()
         setupWebView()
         setupListeners()
         updateNavigationButtons()
@@ -248,6 +287,37 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // 文件选择器初始化
+    // ═══════════════════════════════════════════════════════════════
+
+    private fun setupFileChooserLauncher() {
+        fileChooserLauncher = registerForActivityResult(
+            ActivityResultContracts.StartActivityForResult()
+        ) { result ->
+            handleFileChooserResult(result.resultCode, result.data)
+        }
+    }
+
+    private fun handleFileChooserResult(resultCode: Int, data: Intent?) {
+        if (fileUploadCallback == null) return
+
+        val results: Array<Uri>? = when {
+            resultCode != Activity.RESULT_OK -> null
+            data?.data != null -> arrayOf(data.data!!)
+            data?.clipData != null -> {
+                val clipData = data.clipData!!
+                Array(clipData.itemCount) { clipData.getItemAt(it).uri }
+            }
+            cameraPhotoUri != null -> arrayOf(cameraPhotoUri!!)
+            else -> null
+        }
+
+        fileUploadCallback?.onReceiveValue(results)
+        fileUploadCallback = null
+        cameraPhotoUri = null
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // WebView 配置
     // ═══════════════════════════════════════════════════════════════
 
@@ -269,6 +339,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 cacheMode = WebSettings.LOAD_DEFAULT
                 allowFileAccess = true
                 userAgentString = userAgentString.replace("; wv", "")
+
+                // 启用媒体播放
+                mediaPlaybackRequiresUserGesture = false
             }
 
             mobileUserAgent = settings.userAgentString
@@ -276,10 +349,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             webChromeClient = createWebChromeClient()
         }
 
-        // ═══════════════════════════════════════════════════════════
         // Cookie 管理配置
-        // 启用第三方 Cookie，解决 Firebase Studio 等复杂云服务的兼容性问题
-        // ═══════════════════════════════════════════════════════════
         val cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(true)
         cookieManager.setAcceptThirdPartyCookies(binding.webView, true)
@@ -300,7 +370,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                     desktopModeAppliedForCurrentPage = false
                 }
 
-                // 不在地址栏显示本地主页 URL
                 if (url != null && !url.startsWith("file:")) {
                     binding.editTextUrl.setText(url)
                     binding.editTextUrl.setSelection(url.length)
@@ -311,7 +380,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 updateNavigationButtons()
                 updateBookmarkButton()
 
-                // 本地页面不注入桌面模式脚本
                 if (isPcMode && view != null && url?.startsWith("file:") != true) {
                     view.evaluateJavascript(desktopModeScript, null)
                 }
@@ -325,10 +393,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 updateNavigationButtons()
                 updateBookmarkButton()
 
-                // 确保 Cookie 被持久化
                 CookieManager.getInstance().flush()
 
-                // 本地页面不注入桌面模式脚本
                 if (isPcMode && view != null && url?.startsWith("file:") != true) {
                     handleDesktopModePageFinished(view)
                 }
@@ -410,6 +476,270 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 super.onReceivedTitle(view, title)
                 currentPageTitle = title ?: ""
             }
+
+            // ═══════════════════════════════════════════════════════════
+            // 文件上传处理
+            // ═══════════════════════════════════════════════════════════
+
+            override fun onShowFileChooser(
+                webView: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                // 取消之前的回调
+                fileUploadCallback?.onReceiveValue(null)
+                fileUploadCallback = filePathCallback
+
+                // 检查并请求存储权限
+                if (!hasStoragePermission()) {
+                    requestStoragePermission()
+                    return true
+                }
+
+                showFileChooserDialog(fileChooserParams)
+                return true
+            }
+
+            // ═══════════════════════════════════════════════════════════
+            // WebView 权限请求处理（相机、麦克风）
+            // ═══════════════════════════════════════════════════════════
+
+            override fun onPermissionRequest(request: PermissionRequest?) {
+                request?.let { permRequest ->
+                    pendingPermissionRequest = permRequest
+
+                    val requestedResources = permRequest.resources
+                    val permissionsToRequest = mutableListOf<String>()
+
+                    for (resource in requestedResources) {
+                        when (resource) {
+                            PermissionRequest.RESOURCE_VIDEO_CAPTURE -> {
+                                if (!hasCameraPermission()) {
+                                    permissionsToRequest.add(Manifest.permission.CAMERA)
+                                }
+                            }
+                            PermissionRequest.RESOURCE_AUDIO_CAPTURE -> {
+                                if (!hasMicrophonePermission()) {
+                                    permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
+                                }
+                            }
+                        }
+                    }
+
+                    if (permissionsToRequest.isEmpty()) {
+                        // 所有权限已授予
+                        permRequest.grant(requestedResources)
+                        pendingPermissionRequest = null
+                    } else {
+                        // 请求权限
+                        ActivityCompat.requestPermissions(
+                            this@MainActivity,
+                            permissionsToRequest.toTypedArray(),
+                            PERMISSION_REQUEST_CAMERA
+                        )
+                    }
+                }
+            }
+
+            override fun onPermissionRequestCanceled(request: PermissionRequest?) {
+                super.onPermissionRequestCanceled(request)
+                pendingPermissionRequest = null
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 文件选择对话框
+    // ═══════════════════════════════════════════════════════════════
+
+    private fun showFileChooserDialog(params: WebChromeClient.FileChooserParams?) {
+        val acceptTypes = params?.acceptTypes ?: arrayOf("*/*")
+        val isImageRequest = acceptTypes.any { it.startsWith("image/") }
+        val isVideoRequest = acceptTypes.any { it.startsWith("video/") }
+        val isMediaRequest = isImageRequest || isVideoRequest
+
+        val options = mutableListOf<String>()
+        val intents = mutableListOf<Intent>()
+
+        // 相机选项（仅当请求图片或视频时）
+        if (isMediaRequest || acceptTypes.contains("*/*")) {
+            if (hasCameraPermission()) {
+                options.add(getString(R.string.file_chooser_camera))
+                intents.add(createCameraIntent())
+            }
+        }
+
+        // 相册选项
+        options.add(getString(R.string.file_chooser_gallery))
+        intents.add(createGalleryIntent(acceptTypes))
+
+        // 文件选项
+        options.add(getString(R.string.file_chooser_file))
+        intents.add(createFileIntent(acceptTypes, params?.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE))
+
+        if (options.size == 1) {
+            // 只有一个选项，直接打开
+            fileChooserLauncher.launch(intents[0])
+        } else {
+            // 多个选项，显示对话框
+            AlertDialog.Builder(this)
+                .setTitle(getString(R.string.file_chooser_title))
+                .setItems(options.toTypedArray()) { _, which ->
+                    fileChooserLauncher.launch(intents[which])
+                }
+                .setOnCancelListener {
+                    fileUploadCallback?.onReceiveValue(null)
+                    fileUploadCallback = null
+                }
+                .show()
+        }
+    }
+
+    private fun createCameraIntent(): Intent {
+        val photoFile = createImageFile()
+        cameraPhotoUri = FileProvider.getUriForFile(
+            this,
+            "${packageName}.fileprovider",
+            photoFile
+        )
+        return Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+            putExtra(MediaStore.EXTRA_OUTPUT, cameraPhotoUri)
+        }
+    }
+
+    private fun createGalleryIntent(acceptTypes: Array<String>): Intent {
+        return Intent(Intent.ACTION_PICK).apply {
+            type = when {
+                acceptTypes.any { it.startsWith("image/") } -> "image/*"
+                acceptTypes.any { it.startsWith("video/") } -> "video/*"
+                else -> "*/*"
+            }
+        }
+    }
+
+    private fun createFileIntent(acceptTypes: Array<String>, allowMultiple: Boolean): Intent {
+        return Intent(Intent.ACTION_GET_CONTENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = if (acceptTypes.isNotEmpty() && acceptTypes[0] != "") {
+                acceptTypes[0]
+            } else {
+                "*/*"
+            }
+            if (acceptTypes.size > 1) {
+                putExtra(Intent.EXTRA_MIME_TYPES, acceptTypes)
+            }
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple)
+        }
+    }
+
+    @Throws(IOException::class)
+    private fun createImageFile(): File {
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES)
+            ?: cacheDir
+        return File.createTempFile("CAMERA_${timestamp}_", ".jpg", storageDir)
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 权限检查与请求
+    // ═══════════════════════════════════════════════════════════════
+
+    private fun hasCameraPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            this, Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun hasMicrophonePermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            this, Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun hasStoragePermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+ 使用细粒度权限
+            ContextCompat.checkSelfPermission(
+                this, Manifest.permission.READ_MEDIA_IMAGES
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            // Android 12 及以下
+            ContextCompat.checkSelfPermission(
+                this, Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun requestStoragePermission() {
+        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VIDEO,
+                Manifest.permission.READ_MEDIA_AUDIO
+            )
+        } else {
+            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+
+        ActivityCompat.requestPermissions(
+            this,
+            permissions,
+            PERMISSION_REQUEST_STORAGE
+        )
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+        when (requestCode) {
+            PERMISSION_REQUEST_CAMERA, PERMISSION_REQUEST_MICROPHONE -> {
+                // 处理 WebView 权限请求结果
+                pendingPermissionRequest?.let { request ->
+                    val grantedResources = mutableListOf<String>()
+
+                    for (resource in request.resources) {
+                        when (resource) {
+                            PermissionRequest.RESOURCE_VIDEO_CAPTURE -> {
+                                if (hasCameraPermission()) {
+                                    grantedResources.add(resource)
+                                } else {
+                                    showToast(getString(R.string.toast_permission_camera_denied))
+                                }
+                            }
+                            PermissionRequest.RESOURCE_AUDIO_CAPTURE -> {
+                                if (hasMicrophonePermission()) {
+                                    grantedResources.add(resource)
+                                } else {
+                                    showToast(getString(R.string.toast_permission_mic_denied))
+                                }
+                            }
+                        }
+                    }
+
+                    if (grantedResources.isNotEmpty()) {
+                        request.grant(grantedResources.toTypedArray())
+                    } else {
+                        request.deny()
+                    }
+                    pendingPermissionRequest = null
+                }
+            }
+
+            PERMISSION_REQUEST_STORAGE -> {
+                // 处理存储权限请求结果
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    // 权限授予，重新触发文件选择
+                    showFileChooserDialog(null)
+                } else {
+                    showToast(getString(R.string.toast_permission_storage_denied))
+                    fileUploadCallback?.onReceiveValue(null)
+                    fileUploadCallback = null
+                }
+            }
         }
     }
 
@@ -460,7 +790,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             }
         }
 
-        // 主页按钮
         binding.buttonHome.setOnClickListener {
             loadHomePage()
         }
@@ -474,12 +803,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             true
         }
 
-        // 截图按钮：短按截取当前可见区域
         binding.buttonCapture.setOnClickListener {
             captureVisibleArea()
         }
 
-        // 截图按钮：长按截取完整网页
         binding.buttonCapture.setOnLongClickListener {
             captureWholePage()
             true
@@ -522,7 +849,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private fun updateBookmarkButton() {
         val currentUrl = binding.webView.url
 
-        val isBookmarked = if (!currentUrl.isNullOrBlank() 
+        val isBookmarked = if (!currentUrl.isNullOrBlank()
             && currentUrl != "about:blank"
             && !currentUrl.startsWith("file:")) {
             bookmarkManager.contains(currentUrl)
@@ -540,7 +867,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private fun toggleBookmark() {
         val currentUrl = binding.webView.url
 
-        if (currentUrl.isNullOrBlank() 
+        if (currentUrl.isNullOrBlank()
             || currentUrl == "about:blank"
             || currentUrl.startsWith("file:")) {
             showToast(getString(R.string.toast_bookmark_need_page))
@@ -631,7 +958,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         }
 
         val currentUrl = binding.webView.url
-        if (!currentUrl.isNullOrBlank() 
+        if (!currentUrl.isNullOrBlank()
             && currentUrl != "about:blank"
             && !currentUrl.startsWith("file:")) {
             binding.webView.reload()
@@ -1040,9 +1367,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     // 截图功能
     // ═══════════════════════════════════════════════════════════════
 
-    /**
-     * 短按：截取当前可见区域
-     */
     private fun captureVisibleArea() {
         if (!isPageLoaded) {
             showToast(getString(R.string.toast_page_not_loaded))
@@ -1077,9 +1401,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         }
     }
 
-    /**
-     * 长按：截取完整网页
-     */
     private fun captureWholePage() {
         if (!isPageLoaded) {
             showToast(getString(R.string.toast_page_not_loaded))
@@ -1114,9 +1435,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         }
     }
 
-    /**
-     * 截取当前可见区域的 Bitmap
-     */
     private fun captureVisibleBitmap(): Bitmap? {
         val webView = binding.webView
 
@@ -1134,9 +1452,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         return bitmap
     }
 
-    /**
-     * 截取完整网页的 Bitmap（长截图）
-     */
     private fun captureFullPageBitmap(): Bitmap? {
         val webView = binding.webView
 
