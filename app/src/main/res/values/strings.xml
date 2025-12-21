@@ -126,10 +126,7 @@
     <string name="toast_permission_required">需要权限才能继续</string>
 
     <!-- 文件选择 -->
-    <string name="file_chooser_title">选择文件</string>
-    <string name="file_chooser_camera">拍照</string>
-    <string name="file_chooser_gallery">相册</string>
-    <string name="file_chooser_file">文件</string>
+    <string name="toast_file_picker_error">无法打开文件选择器</string>
 
     <!-- WebView 错误 -->
     <string name="error_page_title">加载失败</string>
