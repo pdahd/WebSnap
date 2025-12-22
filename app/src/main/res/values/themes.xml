@@ -80,6 +80,10 @@
         <item name="buttonBarNeutralButtonStyle">@style/Widget.WebSnap.TimePickerButton</item>
     </style>
 
+    <style name="Theme.WebSnap.TimePicker.GreenHeader" parent="Theme.WebSnap.TimePicker">
+        <item name="colorPrimary">@color/time_picker_header</item>
+    </style>
+
     <!-- TimePicker 按钮样式 -->
     <style name="Widget.WebSnap.TimePickerButton" parent="Widget.MaterialComponents.Button.TextButton">
         <item name="android:textColor">@color/button_text_color</item>
