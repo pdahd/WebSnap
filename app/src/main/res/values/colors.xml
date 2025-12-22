@@ -4,7 +4,6 @@
     <color name="primary">#1976D2</color>
     <color name="primary_dark">#1565C0</color>
     <color name="accent">#FF6F00</color>
-    <color name="time_picker_header">#2E7D32</color>
 
     <!-- 背景色 -->
     <color name="url_bar_background">#F5F5F5</color>
