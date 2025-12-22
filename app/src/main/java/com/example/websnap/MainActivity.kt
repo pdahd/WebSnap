@@ -1089,7 +1089,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
         TimePickerDialog(
             this,
-            R.style.Theme_WebSnap_TimePicker,
+            R.style.Theme_WebSnap_TimePicker_GreenHeader,
             { _, selectedHour, selectedMinute ->
                 showSecondPicker(sheetBinding, selectedHour, selectedMinute)
             },
