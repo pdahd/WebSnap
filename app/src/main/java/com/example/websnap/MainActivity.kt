@@ -1262,6 +1262,24 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     // 截图功能
     // ═══════════════════════════════════════════════════════════════
 
+    /**
+     * 计算截图所需的缩放比例
+     * 在 PC 模式下，webView.scale 可能被 viewport 的 initial-scale 污染
+     * 需要使用实际的宽度比例来计算
+     */
+    private fun getEffectiveScale(): Float {
+        return if (isPcMode) {
+            // PC 模式：viewport 宽度是 desktopViewportWidth (1024)
+            // 实际显示宽度是 webView.width
+            // 真正的缩放比例 = 实际宽度 / 虚拟视口宽度
+            binding.webView.width.toFloat() / desktopViewportWidth.toFloat()
+        } else {
+            // 普通模式：直接使用 WebView 报告的缩放比例
+            @Suppress("DEPRECATION")
+            binding.webView.scale
+        }
+    }
+
     private fun captureVisibleArea() {
         if (!isPageLoaded) {
             showToast(getString(R.string.toast_page_not_loaded))
@@ -1350,8 +1368,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private fun captureFullPageBitmap(): Bitmap? {
         val webView = binding.webView
 
-        @Suppress("DEPRECATION")
-        val scale = webView.scale
+        // ★ 关键修复：使用正确的缩放比例
+        val scale = getEffectiveScale()
         val contentWidth = webView.width
         var contentHeight = (webView.contentHeight * scale).toInt()
 
