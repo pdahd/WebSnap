@@ -805,6 +805,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         bottomSheet.show()
     }
 
+// ═══════════════════════════════════════════════════════════════
+// ★★★ Part 1 结束 ★★★
+// ★★★ Part 2 从「PC 模式」开始 ★★★
+// ═══════════════════════════════════════════════════════════════
     // ═══════════════════════════════════════════════════════════════
     // PC 模式
     // ═══════════════════════════════════════════════════════════════
@@ -1330,18 +1334,16 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     /**
      * 截取整页 Bitmap
      *
-     * ★ 关键修复：使用 computeVerticalScrollRange() 获取精确的内容高度
-     * 这个方法直接返回 WebView 内容的实际像素高度，无需任何缩放计算
-     * 彻底绕开 viewport scale 带来的各种误差
+     * ★ 关键修复：使用自定义 CaptureWebView 的 getContentHeightPx() 方法
+     * 获取精确的内容高度，彻底绕开 viewport scale 带来的各种误差
      */
     private fun captureFullPageBitmap(): Bitmap? {
         val webView = binding.webView
 
         val contentWidth = webView.width
 
-        // ★ 核心修复：使用 computeVerticalScrollRange() 获取精确高度
-        // 这是 WebView 内容的真实像素高度，不受 viewport scale 影响
-        var contentHeight = webView.computeVerticalScrollRange()
+        // ★ 核心修复：使用 CaptureWebView 的公开方法获取精确高度
+        var contentHeight = webView.getContentHeightPx()
 
         if (contentWidth <= 0 || contentHeight <= 0) {
             return null
