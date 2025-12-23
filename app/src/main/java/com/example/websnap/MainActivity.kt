@@ -805,11 +805,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         bottomSheet.show()
     }
 
-    // 
-═══════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════
     // PC 模式
-    //
-═══════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════
 
     private fun updatePcModeButton() {
         binding.buttonPcMode.isSelected = isPcMode
