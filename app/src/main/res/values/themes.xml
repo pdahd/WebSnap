@@ -62,8 +62,9 @@
         <item name="android:colorBackground">#64B5F6</item>
         <item name="colorSurface">#64B5F6</item>
         <item name="colorOnSurface">#000000</item>
-        <item name="colorPrimary">#000000</item>
-        <item name="colorPrimaryVariant">#000000</item>
+        <!-- ★ 修改点：Header 背景色改为墨绿色 -->
+        <item name="colorPrimary">#2E7D32</item>
+        <item name="colorPrimaryVariant">#2E7D32</item>
         <item name="colorSecondary">#000000</item>
         <item name="colorOnPrimary">#FFFFFF</item>
         <item name="colorOnSecondary">#FFFFFF</item>
