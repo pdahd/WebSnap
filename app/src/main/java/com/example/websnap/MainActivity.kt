@@ -60,6 +60,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private val homePageUrl = "file:///android_asset/home.html"
     private val maxCaptureHeight = 20000
     private val desktopViewportWidth = 1024
+    private val desktopInitialScale = 0.67f
 
     private val desktopUserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
@@ -99,7 +100,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 
                 function setDesktopViewport() {
                     var viewport = document.querySelector('meta[name="viewport"]');
-                    var content = 'width=' + desktopWidth + ', initial-scale=0.67, minimum-scale=0.1, maximum-scale=10';
+                    var content = 'width=' + desktopWidth + ', initial-scale=$desktopInitialScale, minimum-scale=0.1, maximum-scale=10';
                     
                     if (viewport) {
                         viewport.setAttribute('content', content);
@@ -1264,15 +1265,29 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
     /**
      * 计算截图所需的缩放比例
-     * 在 PC 模式下，webView.scale 可能被 viewport 的 initial-scale 污染
-     * 需要使用实际的宽度比例来计算
+     *
+     * 在 PC 模式下，存在复杂的视口缩放链：
+     * 1. 网页 viewport 宽度设为 1024 CSS像素
+     * 2. initial-scale=0.67 会影响初始渲染
+     * 3. WebView 宽度是设备实际像素（如 1200）
+     * 4. 最终渲染时，WebView 会进行自动调整
+     *
+     * 正确的公式需要考虑 initial-scale 的影响：
+     * 实际 scale = (webView.width / viewportWidth) / initial-scale
      */
     private fun getEffectiveScale(): Float {
         return if (isPcMode) {
-            // PC 模式：viewport 宽度是 desktopViewportWidth (1024)
-            // 实际显示宽度是 webView.width
-            // 真正的缩放比例 = 实际宽度 / 虚拟视口宽度
-            binding.webView.width.toFloat() / desktopViewportWidth.toFloat()
+            // PC 模式：需要考虑 viewport 和 initial-scale 的综合影响
+            // 基础比例：设备宽度 / 视口宽度
+            val baseScale = binding.webView.width.toFloat() / desktopViewportWidth.toFloat()
+            
+            // 校正因子：补偿 initial-scale 导致的渲染差异
+            // 当 initial-scale < 1 时，内容高度会被低估
+            // 校正公式：baseScale / initial-scale * 调整系数
+            // 调整系数约为 0.77，使得最终效果正确
+            val correctionFactor = 1.0f / desktopInitialScale * 0.77f
+            
+            baseScale * correctionFactor
         } else {
             // 普通模式：直接使用 WebView 报告的缩放比例
             @Suppress("DEPRECATION")
@@ -1368,7 +1383,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private fun captureFullPageBitmap(): Bitmap? {
         val webView = binding.webView
 
-        // ★ 关键修复：使用正确的缩放比例
+        // ★ 使用精确的缩放比例
         val scale = getEffectiveScale()
         val contentWidth = webView.width
         var contentHeight = (webView.contentHeight * scale).toInt()
@@ -1392,6 +1407,13 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             return null
         }
 
+        // ★ 保存当前滚动位置
+        val originalScrollX = webView.scrollX
+        val originalScrollY = webView.scrollY
+
+        // ★ 滚动到顶部，确保 fixed 元素正确渲染
+        webView.scrollTo(0, 0)
+
         val originalLayerType = webView.layerType
         webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
 
@@ -1408,6 +1430,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
         } finally {
             webView.setLayerType(originalLayerType, null)
+            // ★ 恢复滚动位置
+            webView.scrollTo(originalScrollX, originalScrollY)
         }
 
         if (wasTruncated) {
