@@ -62,23 +62,31 @@
         <item name="android:colorBackground">#64B5F6</item>
         <item name="colorSurface">#64B5F6</item>
         <item name="colorOnSurface">#000000</item>
-        <!-- ★ 修改点：Header 背景色改为墨绿色 -->
         <item name="colorPrimary">#2E7D32</item>
         <item name="colorPrimaryVariant">#2E7D32</item>
+        <item name="android:colorPrimary">#2E7D32</item>
         <item name="colorSecondary">#000000</item>
         <item name="colorOnPrimary">#FFFFFF</item>
         <item name="colorOnSecondary">#FFFFFF</item>
-        <item name="colorAccent">#000000</item>
+        <item name="colorAccent">#2E7D32</item>
+        <item name="android:colorAccent">#2E7D32</item>
         <item name="colorControlActivated">#000000</item>
         <item name="colorControlHighlight">#33000000</item>
         <item name="colorControlNormal">#000000</item>
         <item name="android:textColorPrimary">#000000</item>
         <item name="android:textColorSecondary">#000000</item>
         <item name="android:textColorHint">#333333</item>
+        <!-- ★ 关键修复：直接指定 TimePicker 控件的样式 -->
+        <item name="android:timePickerStyle">@style/Widget.WebSnap.TimePickerWidget</item>
         <item name="android:buttonBarButtonStyle">@style/Widget.WebSnap.TimePickerButton</item>
         <item name="buttonBarPositiveButtonStyle">@style/Widget.WebSnap.TimePickerButton</item>
         <item name="buttonBarNegativeButtonStyle">@style/Widget.WebSnap.TimePickerButton</item>
         <item name="buttonBarNeutralButtonStyle">@style/Widget.WebSnap.TimePickerButton</item>
+    </style>
+
+    <!-- ★ 新增：TimePicker 控件样式 - 直接控制 Header 背景 -->
+    <style name="Widget.WebSnap.TimePickerWidget" parent="android:Widget.Material.Light.TimePicker">
+        <item name="android:headerBackground">@drawable/timepicker_header_background</item>
     </style>
 
     <!-- TimePicker 按钮样式 -->
