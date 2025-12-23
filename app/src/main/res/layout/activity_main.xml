@@ -101,7 +101,8 @@
         tools:visibility="visible"
         tools:progress="50" />
 
-    <WebView
+    <!-- ★ 修改点：使用自定义 CaptureWebView -->
+    <com.example.websnap.CaptureWebView
         android:id="@+id/webView"
         android:layout_width="0dp"
         android:layout_height="0dp"
