@@ -149,6 +149,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
 
+    /**
+     * 文件选择器启动器
+     * 必须作为类成员变量在 Activity 创建前注册
+     */
     private val fileChooserLauncher: ActivityResultLauncher<Intent> =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             handleFileChooserResult(result.resultCode, result.data)
@@ -288,6 +292,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     // 文件上传处理
     // ═══════════════════════════════════════════════════════════════
 
+    /**
+     * 处理文件选择结果
+     */
     private fun handleFileChooserResult(resultCode: Int, data: Intent?) {
         val callback = fileUploadCallback
         fileUploadCallback = null
@@ -317,24 +324,37 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         callback.onReceiveValue(results)
     }
 
+    /**
+     * 启动系统文件选择器
+     * 使用 ACTION_OPEN_DOCUMENT 打开完整的存储访问框架(SAF)界面
+     * 这样可以访问：内部存储、SD卡、下载文件夹、文档等所有位置
+     */
     private fun launchSystemFilePicker(params: WebChromeClient.FileChooserParams?) {
         try {
             val allowMultiple = params?.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE
 
+            // 使用 ACTION_OPEN_DOCUMENT 获得完整的存储访问框架(SAF)
+            // 这会显示：内部存储、SD卡、下载、文档等所有入口
             val documentIntent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
+                // 使用 */* 显示所有文件类型，让网页端验证
                 type = "*/*"
+                // 允许多选
                 putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple)
+                // 授予读取权限
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
 
+            // 同时创建 ACTION_GET_CONTENT 作为备选
             val contentIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
                 type = "*/*"
                 putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple)
             }
 
+            // 使用 chooser 组合两种 Intent，让用户看到最完整的选项
             val chooserIntent = Intent.createChooser(contentIntent, null).apply {
+                // 将 ACTION_OPEN_DOCUMENT 作为额外选项添加
                 putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(documentIntent))
             }
 
@@ -805,10 +825,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         bottomSheet.show()
     }
 
-// ═══════════════════════════════════════════════════════════════
-// ★★★ Part 1 结束 ★★★
-// ★★★ Part 2 从「PC 模式」开始 ★★★
-// ═══════════════════════════════════════════════════════════════
     // ═══════════════════════════════════════════════════════════════
     // PC 模式
     // ═══════════════════════════════════════════════════════════════
@@ -1246,6 +1262,24 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     // 截图功能
     // ═══════════════════════════════════════════════════════════════
 
+    /**
+     * 计算截图所需的缩放比例
+     * 在 PC 模式下，webView.scale 可能被 viewport 的 initial-scale 污染
+     * 需要使用实际的宽度比例来计算
+     */
+    private fun getEffectiveScale(): Float {
+        return if (isPcMode) {
+            // PC 模式：viewport 宽度是 desktopViewportWidth (1024)
+            // 实际显示宽度是 webView.width
+            // 真正的缩放比例 = 实际宽度 / 虚拟视口宽度
+            binding.webView.width.toFloat() / desktopViewportWidth.toFloat()
+        } else {
+            // 普通模式：直接使用 WebView 报告的缩放比例
+            @Suppress("DEPRECATION")
+            binding.webView.scale
+        }
+    }
+
     private fun captureVisibleArea() {
         if (!isPageLoaded) {
             showToast(getString(R.string.toast_page_not_loaded))
@@ -1331,19 +1365,13 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         return bitmap
     }
 
-    /**
-     * 截取整页 Bitmap
-     *
-     * ★ 关键修复：使用自定义 CaptureWebView 的 getContentHeightPx() 方法
-     * 获取精确的内容高度，彻底绕开 viewport scale 带来的各种误差
-     */
     private fun captureFullPageBitmap(): Bitmap? {
         val webView = binding.webView
 
+        // ★ 关键修复：使用正确的缩放比例
+        val scale = getEffectiveScale()
         val contentWidth = webView.width
-
-        // ★ 核心修复：使用 CaptureWebView 的公开方法获取精确高度
-        var contentHeight = webView.getContentHeightPx()
+        var contentHeight = (webView.contentHeight * scale).toInt()
 
         if (contentWidth <= 0 || contentHeight <= 0) {
             return null
