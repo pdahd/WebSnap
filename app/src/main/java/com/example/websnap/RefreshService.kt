@@ -1,3 +1,4 @@
+
 package com.example.websnap
 
 import android.app.Notification
@@ -21,6 +22,7 @@ import java.util.Locale
  * 前台刷新服务
  *
  * 负责在后台维持定时任务，确保 App 在后台时也能准时刷新。
+ * 新增：防休眠心跳模式
  */
 class RefreshService : Service() {
 
@@ -39,6 +41,11 @@ class RefreshService : Service() {
         const val EXTRA_TASK_TYPE = "task_type"
         const val EXTRA_INTERVAL_SECONDS = "interval_seconds"
         const val EXTRA_TARGET_TIME = "target_time"
+
+        // 任务类型常量
+        const val TASK_TYPE_INTERVAL = "interval"
+        const val TASK_TYPE_SCHEDULED = "scheduled"
+        const val TASK_TYPE_ANTI_SLEEP = "anti_sleep"
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -61,7 +68,7 @@ class RefreshService : Service() {
     private var currentTask: RefreshTask? = null
     private var state: RefreshState = RefreshState.IDLE
 
-    /** 下一次刷新的时间戳（毫秒） */
+    /** 下一次刷新/心跳的时间戳（毫秒） */
     private var nextRefreshTimeMillis: Long = 0
 
     /** 回调监听器 */
@@ -85,15 +92,19 @@ class RefreshService : Service() {
             ACTION_START_TASK -> {
                 val taskType = intent.getStringExtra(EXTRA_TASK_TYPE)
                 when (taskType) {
-                    "interval" -> {
+                    TASK_TYPE_INTERVAL -> {
                         val seconds = intent.getLongExtra(EXTRA_INTERVAL_SECONDS, 60)
                         startIntervalTask(seconds)
                     }
-                    "scheduled" -> {
+                    TASK_TYPE_SCHEDULED -> {
                         val targetTime = intent.getLongExtra(EXTRA_TARGET_TIME, 0)
                         if (targetTime > 0) {
                             startScheduledTask(targetTime)
                         }
+                    }
+                    TASK_TYPE_ANTI_SLEEP -> {
+                        val seconds = intent.getLongExtra(EXTRA_INTERVAL_SECONDS, 60)
+                        startAntiSleepTask(seconds)
                     }
                 }
             }
@@ -144,7 +155,16 @@ class RefreshService : Service() {
     /**
      * 是否有活动任务
      */
-    fun hasActiveTask(): Boolean = currentTask != null && state == RefreshState.COUNTING
+    fun hasActiveTask(): Boolean {
+        return currentTask != null && (state == RefreshState.COUNTING || state == RefreshState.HEARTBEAT)
+    }
+
+    /**
+     * 是否是防休眠模式
+     */
+    fun isAntiSleepMode(): Boolean {
+        return currentTask is RefreshTask.AntiSleep
+    }
 
     /**
      * 启动间隔刷新任务
@@ -188,11 +208,27 @@ class RefreshService : Service() {
     }
 
     /**
+     * 启动防休眠任务（心跳模式）
+     */
+    fun startAntiSleepTask(intervalSeconds: Long) {
+        stopTask()
+
+        currentTask = RefreshTask.AntiSleep(intervalSeconds)
+        nextRefreshTimeMillis = System.currentTimeMillis() + (intervalSeconds * 1000)
+        state = RefreshState.HEARTBEAT
+
+        startForeground(NOTIFICATION_ID, createNotification())
+        startHeartbeat()
+
+        listener?.onTaskStarted(currentTask!!)
+    }
+
+    /**
      * 停止当前任务
      */
     fun stopTask() {
         handler.removeCallbacksAndMessages(null)
-        
+
         val hadTask = currentTask != null
         currentTask = null
         nextRefreshTimeMillis = 0
@@ -205,15 +241,8 @@ class RefreshService : Service() {
         }
     }
 
-    /**
-     * 手动触发刷新（单击刷新按钮时）
-     */
-    fun triggerManualRefresh() {
-        listener?.onRefreshTriggered()
-    }
-
     // ═══════════════════════════════════════════════════════════════
-    // 内部逻辑
+    // 内部逻辑 - 刷新倒计时
     // ═══════════════════════════════════════════════════════════════
 
     private val countdownRunnable = object : Runnable {
@@ -262,11 +291,53 @@ class RefreshService : Service() {
                     startCountdown()
                     listener?.onTaskStarted(currentTask!!)
                 }
-                null -> {
+                else -> {
                     state = RefreshState.IDLE
                 }
             }
         }, 1000)
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 内部逻辑 - 防休眠心跳
+    // ═══════════════════════════════════════════════════════════════
+
+    private val heartbeatRunnable = object : Runnable {
+        override fun run() {
+            val task = currentTask
+            if (task !is RefreshTask.AntiSleep) return
+
+            val remaining = getRemainingSeconds()
+
+            if (remaining <= 0) {
+                // 时间到，执行心跳
+                performHeartbeat(task)
+            } else {
+                // 更新倒计时
+                listener?.onAntiSleepTick(remaining)
+                updateNotification()
+
+                // 每秒更新一次
+                handler.postDelayed(this, 1000)
+            }
+        }
+    }
+
+    private fun startHeartbeat() {
+        handler.removeCallbacks(heartbeatRunnable)
+        handler.post(heartbeatRunnable)
+    }
+
+    private fun performHeartbeat(task: RefreshTask.AntiSleep) {
+        // 触发心跳回调（MainActivity 负责执行 JS）
+        listener?.onAntiSleepHeartbeat()
+
+        // 重置下次心跳时间
+        nextRefreshTimeMillis = System.currentTimeMillis() + (task.intervalSeconds * 1000)
+        updateNotification()
+
+        // 继续心跳循环
+        handler.postDelayed(heartbeatRunnable, 1000)
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -308,21 +379,25 @@ class RefreshService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val contentText = when (val task = currentTask) {
+        val (title, contentText) = when (val task = currentTask) {
             is RefreshTask.Interval -> {
                 val remaining = getRemainingSeconds()
-                "间隔刷新 | 倒计时: ${formatSeconds(remaining)}"
+                "自动刷新" to "间隔刷新 | 倒计时: ${formatSeconds(remaining)}"
             }
             is RefreshTask.Scheduled -> {
                 val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                "定时刷新 | 目标: ${timeFormat.format(Date(task.targetTimeMillis))}"
+                "自动刷新" to "定时刷新 | 目标: ${timeFormat.format(Date(task.targetTimeMillis))}"
             }
-            null -> "等待中..."
+            is RefreshTask.AntiSleep -> {
+                val remaining = getRemainingSeconds()
+                "防休眠模式保护中..." to "心跳间隔: ${task.intervalSeconds}秒 | 下次: ${formatSeconds(remaining)}"
+            }
+            null -> "WebSnap" to "等待中..."
         }
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_popup_sync)
-            .setContentTitle("WebSnap 自动刷新")
+            .setContentTitle(title)
             .setContentText(contentText)
             .setContentIntent(pendingIntent)
             .addAction(android.R.drawable.ic_delete, "取消", cancelIntent)
@@ -358,7 +433,7 @@ class RefreshService : Service() {
         /** 任务已启动 */
         fun onTaskStarted(task: RefreshTask)
 
-        /** 倒计时更新（每秒调用） */
+        /** 倒计时更新（每秒调用，用于间隔/定时刷新） */
         fun onCountdownTick(remainingSeconds: Long)
 
         /** 需要执行刷新 */
@@ -366,5 +441,11 @@ class RefreshService : Service() {
 
         /** 任务已取消 */
         fun onTaskCancelled()
+
+        /** 防休眠倒计时更新（每秒调用） */
+        fun onAntiSleepTick(remainingSeconds: Long)
+
+        /** 需要执行防休眠心跳（注入 JS） */
+        fun onAntiSleepHeartbeat()
     }
 }
