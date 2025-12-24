@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 按下状态：黑色填充 + 白色文字（由 color selector 控制） -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#000000" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 选中/激活状态：黑色填充（防休眠模式开启） -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <item android:state_activated="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#000000" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+
+    <item android:state_selected="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#000000" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 默认状态：透明背景 + 黑色线框 -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+            <stroke
+                android:width="2dp"
+                android:color="#000000" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+
+</selector>
