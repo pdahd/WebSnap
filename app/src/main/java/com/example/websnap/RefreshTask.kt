@@ -27,6 +27,16 @@ sealed class RefreshTask : Serializable {
         override fun getDisplayName(): String = "定时刷新"
     }
 
+    /**
+     * 防休眠任务（心跳模式）
+     * @param intervalSeconds 心跳间隔（秒）
+     */
+    data class AntiSleep(
+        val intervalSeconds: Long
+    ) : RefreshTask() {
+        override fun getDisplayName(): String = "防休眠模式"
+    }
+
     abstract fun getDisplayName(): String
 
     companion object {
@@ -40,5 +50,6 @@ sealed class RefreshTask : Serializable {
 enum class RefreshState {
     IDLE,           // 空闲，无任务
     COUNTING,       // 倒计时中
-    REFRESHING      // 正在刷新
+    REFRESHING,     // 正在刷新
+    HEARTBEAT       // 防休眠心跳中
 }
