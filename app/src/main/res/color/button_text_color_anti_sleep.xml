@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 按下状态：白色文字 -->
+    <item android:state_pressed="true" android:color="#FFFFFF" />
+
+    <!-- 选中/激活状态：白色文字（防休眠模式开启时） -->
+    <item android:state_activated="true" android:color="#FFFFFF" />
+    <item android:state_selected="true" android:color="#FFFFFF" />
+
+    <!-- 默认状态：黑色文字 -->
+    <item android:color="#000000" />
+
+</selector>
