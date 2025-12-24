@@ -108,9 +108,7 @@
     <string name="dialog_button_ok">确定</string>
     <string name="toast_invalid_interval">请输入有效的时间间隔</string>
 
-    <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- 防休眠模式（新增） -->
-    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 防休眠模式 -->
     <string name="anti_sleep_title">💓 防休眠模式</string>
     <string name="anti_sleep_off">关闭</string>
     <string name="anti_sleep_on">开启中</string>
@@ -123,6 +121,30 @@
     <string name="toast_anti_sleep_invalid_interval">请输入有效的心跳间隔（1-9999秒）</string>
     <string name="refresh_current_task_anti_sleep">防休眠模式：每 %1$s 秒 | 下次心跳 %2$s</string>
     <string name="anti_sleep_current_task_icon">💓</string>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 下载功能（新增） -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <string name="toast_download_started">正在下载：%1$s</string>
+    <string name="toast_download_complete">下载完成：%1$s</string>
+    <string name="toast_download_failed">下载失败，请重试</string>
+    <string name="toast_download_no_permission">需要存储权限才能下载文件</string>
+    <string name="toast_download_unsupported">不支持的下载链接</string>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 长按菜单（新增） -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <string name="menu_title_image">图片选项</string>
+    <string name="menu_title_link">链接选项</string>
+    <string name="menu_title_image_link">图片/链接选项</string>
+    <string name="menu_save_image">保存图片</string>
+    <string name="menu_copy_image_url">复制图片链接</string>
+    <string name="menu_copy_link_url">复制链接地址</string>
+    <string name="toast_image_saved">图片已保存到相册</string>
+    <string name="toast_image_save_failed">图片保存失败</string>
+    <string name="toast_image_saving">正在保存图片…</string>
+    <string name="toast_link_copied">链接已复制到剪贴板</string>
+    <string name="toast_copy_failed">复制失败</string>
 
     <!-- 裁剪界面 -->
     <string name="crop_title">裁剪图片</string>
