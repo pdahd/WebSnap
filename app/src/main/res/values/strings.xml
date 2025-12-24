@@ -21,6 +21,7 @@
     <string name="button_refresh_countdown">⏱️ %1$s</string>
     <string name="button_refresh_scheduled">🕐 %1$s</string>
     <string name="button_refreshing">刷新中…</string>
+    <string name="button_anti_sleep_active">💓 %1$s</string>
 
     <!-- 无障碍描述 -->
     <string name="content_desc_back">后退</string>
@@ -106,6 +107,22 @@
     <string name="dialog_button_cancel">取消</string>
     <string name="dialog_button_ok">确定</string>
     <string name="toast_invalid_interval">请输入有效的时间间隔</string>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 防休眠模式（新增） -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <string name="anti_sleep_title">💓 防休眠模式</string>
+    <string name="anti_sleep_off">关闭</string>
+    <string name="anti_sleep_on">开启中</string>
+    <string name="anti_sleep_description">定期向网页发送心跳信号，防止云端虚拟机（如 Colab、Firebase Studio）因长时间无操作而断开连接。不会刷新页面，不会丢失运行状态。</string>
+    <string name="anti_sleep_interval_prefix">心跳间隔</string>
+    <string name="anti_sleep_interval_suffix">秒</string>
+    <string name="toast_anti_sleep_started">防休眠模式已开启</string>
+    <string name="toast_anti_sleep_stopped">防休眠模式已关闭</string>
+    <string name="toast_anti_sleep_need_page">请先加载网页</string>
+    <string name="toast_anti_sleep_invalid_interval">请输入有效的心跳间隔（1-9999秒）</string>
+    <string name="refresh_current_task_anti_sleep">防休眠模式：每 %1$s 秒 | 下次心跳 %2$s</string>
+    <string name="anti_sleep_current_task_icon">💓</string>
 
     <!-- 裁剪界面 -->
     <string name="crop_title">裁剪图片</string>
