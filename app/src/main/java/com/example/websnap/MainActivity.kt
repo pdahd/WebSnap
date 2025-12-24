@@ -4,25 +4,36 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.DownloadManager
 import android.app.TimePickerDialog
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ComponentName
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.IBinder
+import android.provider.MediaStore
+import android.util.Base64
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.webkit.CookieManager
+import android.webkit.DownloadListener
+import android.webkit.MimeTypeMap
 import android.webkit.PermissionRequest
+import android.webkit.URLUtil
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -44,10 +55,16 @@ import com.example.websnap.databinding.ActivityMainBinding
 import com.example.websnap.databinding.BottomSheetBookmarksBinding
 import com.example.websnap.databinding.BottomSheetRefreshBinding
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
@@ -171,6 +188,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     companion object {
         private const val PERMISSION_REQUEST_CAMERA = 1001
         private const val PERMISSION_REQUEST_MICROPHONE = 1002
+        private const val PERMISSION_REQUEST_STORAGE = 1003
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -240,6 +258,16 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // 下载相关
+    // ═══════════════════════════════════════════════════════════════
+
+    /** 后台执行器，用于图片下载等耗时操作 */
+    private val executor = Executors.newSingleThreadExecutor()
+
+    /** 待保存的图片 URL（等待权限授权后使用） */
+    private var pendingImageUrl: String? = null
+
+    // ═══════════════════════════════════════════════════════════════
     // 生命周期
     // ═══════════════════════════════════════════════════════════════
 
@@ -307,6 +335,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             removeAllViews()
             destroy()
         }
+
+        executor.shutdown()
         super.onDestroy()
     }
 
@@ -367,35 +397,25 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
     /**
      * 启动系统文件选择器
-     * 使用 ACTION_OPEN_DOCUMENT 打开完整的存储访问框架(SAF)界面
-     * 这样可以访问：内部存储、SD卡、下载文件夹、文档等所有位置
      */
     private fun launchSystemFilePicker(params: WebChromeClient.FileChooserParams?) {
         try {
             val allowMultiple = params?.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE
 
-            // 使用 ACTION_OPEN_DOCUMENT 获得完整的存储访问框架(SAF)
-            // 这会显示：内部存储、SD卡、下载、文档等所有入口
             val documentIntent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
-                // 使用 */* 显示所有文件类型，让网页端验证
                 type = "*/*"
-                // 允许多选
                 putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple)
-                // 授予读取权限
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
 
-            // 同时创建 ACTION_GET_CONTENT 作为备选
             val contentIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
                 type = "*/*"
                 putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple)
             }
 
-            // 使用 chooser 组合两种 Intent，让用户看到最完整的选项
             val chooserIntent = Intent.createChooser(contentIntent, null).apply {
-                // 将 ACTION_OPEN_DOCUMENT 作为额外选项添加
                 putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(documentIntent))
             }
 
@@ -413,7 +433,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     // WebView 配置
     // ═══════════════════════════════════════════════════════════════
 
-    @SuppressLint("SetJavaScriptEnabled")
+    @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     private fun setupWebView() {
         binding.webView.apply {
             mobileUserAgent = settings.userAgentString
@@ -437,11 +457,178 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             mobileUserAgent = settings.userAgentString
             webViewClient = createWebViewClient()
             webChromeClient = createWebChromeClient()
+
+            // ★ 添加 JavaScript 接口（用于 blob 下载）
+            addJavascriptInterface(WebAppInterface(this@MainActivity), WebAppInterface.INTERFACE_NAME)
+
+            // ★ 添加下载监听器
+            setDownloadListener(createDownloadListener())
+
+            // ★ 添加长按监听器
+            setOnLongClickListener {
+                handleLongPress()
+                true
+            }
         }
 
         val cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(true)
         cookieManager.setAcceptThirdPartyCookies(binding.webView, true)
+    }
+
+    /**
+     * 创建下载监听器
+     */
+    private fun createDownloadListener(): DownloadListener {
+        return DownloadListener { url, userAgent, contentDisposition, mimeType, contentLength ->
+            handleDownload(url, userAgent, contentDisposition, mimeType, contentLength)
+        }
+    }
+
+    /**
+     * 处理下载请求
+     */
+    private fun handleDownload(
+        url: String,
+        userAgent: String,
+        contentDisposition: String,
+        mimeType: String,
+        contentLength: Long
+    ) {
+        when {
+            // Blob URL 需要特殊处理
+            url.startsWith("blob:") -> {
+                handleBlobDownload(url, mimeType)
+            }
+            // Data URL 直接解析保存
+            url.startsWith("data:") -> {
+                handleDataUrlDownload(url)
+            }
+            // 普通 HTTP/HTTPS URL 使用系统下载管理器
+            url.startsWith("http://") || url.startsWith("https://") -> {
+                handleHttpDownload(url, userAgent, contentDisposition, mimeType)
+            }
+            else -> {
+                showToast(getString(R.string.toast_download_unsupported))
+            }
+        }
+    }
+
+    /**
+     * 处理 HTTP/HTTPS 下载
+     */
+    private fun handleHttpDownload(
+        url: String,
+        userAgent: String,
+        contentDisposition: String,
+        mimeType: String
+    ) {
+        try {
+            val request = DownloadManager.Request(Uri.parse(url)).apply {
+                // 设置 User-Agent
+                addRequestHeader("User-Agent", userAgent)
+
+                // 添加 Cookie
+                val cookies = CookieManager.getInstance().getCookie(url)
+                if (!cookies.isNullOrBlank()) {
+                    addRequestHeader("Cookie", cookies)
+                }
+
+                // 生成文件名
+                val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
+
+                // 设置通知
+                setTitle(fileName)
+                setDescription("正在下载...")
+                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+
+                // 设置保存位置
+                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+
+                // 允许在移动网络和 WiFi 下下载
+                setAllowedNetworkTypes(
+                    DownloadManager.Request.NETWORK_WIFI or
+                    DownloadManager.Request.NETWORK_MOBILE
+                )
+            }
+
+            val downloadManager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+            downloadManager.enqueue(request)
+
+            val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
+            showToast(getString(R.string.toast_download_started, fileName))
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            showToast(getString(R.string.toast_download_failed))
+        }
+    }
+
+    /**
+     * 处理 Blob URL 下载
+     * 通过注入 JavaScript 将 blob 转换为 base64 并传给 Android
+     */
+    private fun handleBlobDownload(blobUrl: String, mimeType: String) {
+        val script = """
+            (function() {
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', '$blobUrl', true);
+                xhr.responseType = 'blob';
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        var reader = new FileReader();
+                        reader.onloadend = function() {
+                            var base64 = reader.result.split(',')[1];
+                            var mime = xhr.response.type || '$mimeType';
+                            window.${WebAppInterface.INTERFACE_NAME}.saveBase64File(base64, mime, null);
+                        };
+                        reader.readAsDataURL(xhr.response);
+                    }
+                };
+                xhr.onerror = function() {
+                    console.log('[WebSnap] Blob download failed');
+                };
+                xhr.send();
+            })();
+        """.trimIndent()
+
+        binding.webView.evaluateJavascript(script, null)
+        showToast(getString(R.string.toast_download_started, "文件"))
+    }
+
+    /**
+     * 处理 Data URL 下载
+     */
+    private fun handleDataUrlDownload(dataUrl: String) {
+        try {
+            // 解析 data URL: data:[<mediatype>][;base64],<data>
+            val parts = dataUrl.substringAfter("data:").split(",", limit = 2)
+            if (parts.size != 2) {
+                showToast(getString(R.string.toast_download_failed))
+                return
+            }
+
+            val metaPart = parts[0]
+            val dataPart = parts[1]
+
+            val mimeType = metaPart.substringBefore(";").ifBlank { "application/octet-stream" }
+            val isBase64 = metaPart.contains("base64")
+
+            val data = if (isBase64) {
+                Base64.decode(dataPart, Base64.DEFAULT)
+            } else {
+                dataPart.toByteArray()
+            }
+
+            // 使用 WebAppInterface 的逻辑保存
+            val webInterface = WebAppInterface(this)
+            val base64Data = Base64.encodeToString(data, Base64.DEFAULT)
+            webInterface.saveBase64File(base64Data, mimeType, null)
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            showToast(getString(R.string.toast_download_failed))
+        }
     }
 
     private fun createWebViewClient(): WebViewClient {
@@ -622,6 +809,303 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // 长按处理
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * 处理 WebView 长按事件
+     */
+    private fun handleLongPress(): Boolean {
+        val hitTestResult = binding.webView.hitTestResult
+        val type = hitTestResult.type
+        val extra = hitTestResult.extra
+
+        return when (type) {
+            WebView.HitTestResult.IMAGE_TYPE -> {
+                // 长按图片
+                extra?.let { showImageContextMenu(it) }
+                true
+            }
+            WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> {
+                // 长按带链接的图片
+                extra?.let { showImageLinkContextMenu(it) }
+                true
+            }
+            WebView.HitTestResult.SRC_ANCHOR_TYPE -> {
+                // 长按链接
+                extra?.let { showLinkContextMenu(it) }
+                true
+            }
+            else -> false
+        }
+    }
+
+    /**
+     * 显示图片长按菜单
+     */
+    private fun showImageContextMenu(imageUrl: String) {
+        val options = arrayOf(
+            getString(R.string.menu_save_image),
+            getString(R.string.menu_copy_image_url)
+        )
+
+        AlertDialog.Builder(this, R.style.Theme_WebSnap_AlertDialog)
+            .setTitle(getString(R.string.menu_title_image))
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> saveImage(imageUrl)
+                    1 -> copyToClipboard(imageUrl)
+                }
+            }
+            .show()
+    }
+
+    /**
+     * 显示带链接的图片长按菜单
+     */
+    private fun showImageLinkContextMenu(imageUrl: String) {
+        // 尝试获取链接地址（通过注入 JS）
+        val options = arrayOf(
+            getString(R.string.menu_save_image),
+            getString(R.string.menu_copy_image_url)
+        )
+
+        AlertDialog.Builder(this, R.style.Theme_WebSnap_AlertDialog)
+            .setTitle(getString(R.string.menu_title_image_link))
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> saveImage(imageUrl)
+                    1 -> copyToClipboard(imageUrl)
+                }
+            }
+            .show()
+    }
+
+    /**
+     * 显示链接长按菜单
+     */
+    private fun showLinkContextMenu(linkUrl: String) {
+        val options = arrayOf(
+            getString(R.string.menu_copy_link_url)
+        )
+
+        AlertDialog.Builder(this, R.style.Theme_WebSnap_AlertDialog)
+            .setTitle(getString(R.string.menu_title_link))
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> copyToClipboard(linkUrl)
+                }
+            }
+            .show()
+    }
+
+    /**
+     * 复制文本到剪贴板
+     */
+    private fun copyToClipboard(text: String) {
+        try {
+            val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = ClipData.newPlainText("WebSnap", text)
+            clipboard.setPrimaryClip(clip)
+            showToast(getString(R.string.toast_link_copied))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            showToast(getString(R.string.toast_copy_failed))
+        }
+    }
+
+    /**
+     * 保存图片
+     */
+    private fun saveImage(imageUrl: String) {
+        when {
+            imageUrl.startsWith("data:") -> {
+                // Base64 图片直接解码保存
+                saveDataUrlImage(imageUrl)
+            }
+            imageUrl.startsWith("blob:") -> {
+                // Blob URL 需要通过 JS 转换
+                saveBlobImage(imageUrl)
+            }
+            imageUrl.startsWith("http://") || imageUrl.startsWith("https://") -> {
+                // HTTP 图片需要下载
+                saveHttpImage(imageUrl)
+            }
+            else -> {
+                showToast(getString(R.string.toast_image_save_failed))
+            }
+        }
+    }
+
+    /**
+     * 保存 Data URL 格式的图片
+     */
+    private fun saveDataUrlImage(dataUrl: String) {
+        try {
+            val parts = dataUrl.substringAfter("data:").split(",", limit = 2)
+            if (parts.size != 2) {
+                showToast(getString(R.string.toast_image_save_failed))
+                return
+            }
+
+            val metaPart = parts[0]
+            val dataPart = parts[1]
+            val mimeType = metaPart.substringBefore(";").ifBlank { "image/png" }
+
+            val imageData = Base64.decode(dataPart, Base64.DEFAULT)
+            saveImageBytes(imageData, mimeType)
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            showToast(getString(R.string.toast_image_save_failed))
+        }
+    }
+
+    /**
+     * 保存 Blob URL 格式的图片
+     */
+    private fun saveBlobImage(blobUrl: String) {
+        val script = """
+            (function() {
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', '$blobUrl', true);
+                xhr.responseType = 'blob';
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        var reader = new FileReader();
+                        reader.onloadend = function() {
+                            var base64 = reader.result.split(',')[1];
+                            var mime = xhr.response.type || 'image/png';
+                            window.${WebAppInterface.INTERFACE_NAME}.saveBase64Image(base64, mime);
+                        };
+                        reader.readAsDataURL(xhr.response);
+                    }
+                };
+                xhr.send();
+            })();
+        """.trimIndent()
+
+        binding.webView.evaluateJavascript(script, null)
+        showToast(getString(R.string.toast_image_saving))
+    }
+
+    /**
+     * 保存 HTTP/HTTPS 格式的图片
+     */
+    private fun saveHttpImage(imageUrl: String) {
+        showToast(getString(R.string.toast_image_saving))
+
+        executor.execute {
+            try {
+                val url = URL(imageUrl)
+                val connection = url.openConnection() as HttpURLConnection
+                connection.doInput = true
+                connection.connect()
+
+                val inputStream: InputStream = connection.inputStream
+                val imageData = inputStream.readBytes()
+                inputStream.close()
+
+                // 获取 MIME 类型
+                val mimeType = connection.contentType ?: guessMimeTypeFromUrl(imageUrl)
+
+                runOnUiThread {
+                    saveImageBytes(imageData, mimeType)
+                }
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+                runOnUiThread {
+                    showToast(getString(R.string.toast_image_save_failed))
+                }
+            }
+        }
+    }
+
+    /**
+     * 从 URL 猜测 MIME 类型
+     */
+    private fun guessMimeTypeFromUrl(url: String): String {
+        val extension = MimeTypeMap.getFileExtensionFromUrl(url)
+        return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "image/png"
+    }
+
+    /**
+     * 将图片字节数据保存到相册
+     */
+    private fun saveImageBytes(imageData: ByteArray, mimeType: String) {
+        try {
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+                .format(Date())
+            val extension = when {
+                mimeType.contains("jpeg") || mimeType.contains("jpg") -> ".jpg"
+                mimeType.contains("png") -> ".png"
+                mimeType.contains("gif") -> ".gif"
+                mimeType.contains("webp") -> ".webp"
+                else -> ".png"
+            }
+            val fileName = "WebSnap_$timestamp$extension"
+
+            val saved = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Android 10+
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+                    put(MediaStore.Images.Media.MIME_TYPE, mimeType)
+                    put(MediaStore.Images.Media.DATE_ADDED, System.currentTimeMillis() / 1000)
+                    put(MediaStore.Images.Media.DATE_MODIFIED, System.currentTimeMillis() / 1000)
+                    put(
+                        MediaStore.Images.Media.RELATIVE_PATH,
+                        "${Environment.DIRECTORY_PICTURES}/WebSnap"
+                    )
+                    put(MediaStore.Images.Media.IS_PENDING, 1)
+                }
+
+                val resolver = contentResolver
+                val uri = resolver.insert(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    contentValues
+                )
+
+                if (uri != null) {
+                    resolver.openOutputStream(uri)?.use { outputStream ->
+                        outputStream.write(imageData)
+                    }
+                    contentValues.clear()
+                    contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
+                    resolver.update(uri, contentValues, null, null)
+                    true
+                } else {
+                    false
+                }
+            } else {
+                // Android 9 及以下
+                val picturesDir = Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_PICTURES
+                )
+                val webSnapDir = File(picturesDir, "WebSnap")
+                if (!webSnapDir.exists()) {
+                    webSnapDir.mkdirs()
+                }
+
+                val file = File(webSnapDir, fileName)
+                FileOutputStream(file).use { outputStream ->
+                    outputStream.write(imageData)
+                }
+                true
+            }
+
+            showToast(
+                if (saved) getString(R.string.toast_image_saved)
+                else getString(R.string.toast_image_save_failed)
+            )
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            showToast(getString(R.string.toast_image_save_failed))
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // 权限检查与请求
     // ═══════════════════════════════════════════════════════════════
 
@@ -675,6 +1159,15 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                     }
                     pendingPermissionRequest = null
                 }
+            }
+            PERMISSION_REQUEST_STORAGE -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    // 权限获取成功，重试保存图片
+                    pendingImageUrl?.let { saveImage(it) }
+                } else {
+                    showToast(getString(R.string.toast_download_no_permission))
+                }
+                pendingImageUrl = null
             }
         }
     }
