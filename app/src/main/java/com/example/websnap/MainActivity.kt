@@ -123,6 +123,47 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             })();
         """.trimIndent()
 
+    /**
+     * 防休眠心跳脚本
+     * 通过模拟用户活动来欺骗服务器保持会话
+     */
+    private val antiSleepHeartbeatScript: String
+        get() = """
+            (function() {
+                try {
+                    // 1. 微小滚动（最有效的保活方式）
+                    window.scrollBy(0, 1);
+                    window.scrollBy(0, -1);
+                    
+                    // 2. 触发鼠标移动事件
+                    document.dispatchEvent(new MouseEvent('mousemove', {
+                        bubbles: true,
+                        clientX: Math.random() * 100,
+                        clientY: Math.random() * 100
+                    }));
+                    
+                    // 3. 触发键盘事件（某些网站检测这个）
+                    document.dispatchEvent(new KeyboardEvent('keydown', {
+                        bubbles: true,
+                        key: 'Shift',
+                        code: 'ShiftLeft'
+                    }));
+                    document.dispatchEvent(new KeyboardEvent('keyup', {
+                        bubbles: true,
+                        key: 'Shift',
+                        code: 'ShiftLeft'
+                    }));
+                    
+                    // 4. 触发 focus 事件
+                    window.dispatchEvent(new Event('focus'));
+                    
+                    console.log('[WebSnap] Anti-sleep heartbeat sent');
+                } catch(e) {
+                    console.log('[WebSnap] Heartbeat error: ' + e);
+                }
+            })();
+        """.trimIndent()
+
     // ═══════════════════════════════════════════════════════════════
     // 权限请求码
     // ═══════════════════════════════════════════════════════════════
@@ -825,6 +866,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         bottomSheet.show()
     }
 
+// ═══════════════════════════════════════════════════════════════
+// ★★★ Part 1 结束 ★★★
+// ★★★ Part 2 从「PC 模式」开始 ★★★
+// ═══════════════════════════════════════════════════════════════
     // ═══════════════════════════════════════════════════════════════
     // PC 模式
     // ═══════════════════════════════════════════════════════════════
@@ -898,6 +943,12 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         timeFormat.format(Date(task.targetTimeMillis))
                     )
                 }
+                is RefreshTask.AntiSleep -> {
+                    binding.buttonRefresh.text = getString(
+                        R.string.button_anti_sleep_active,
+                        formatSeconds(remaining)
+                    )
+                }
                 null -> {
                     binding.buttonRefresh.isActivated = false
                     binding.buttonRefresh.text = getString(R.string.button_refresh_default)
@@ -928,6 +979,69 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
         selectedScheduledTime = null
         customIntervalSeconds = null
+
+        // ═══════════════════════════════════════════════════════════
+        // 防休眠模式 UI 逻辑
+        // ═══════════════════════════════════════════════════════════
+
+        val service = refreshService
+        val isAntiSleepActive = service?.isAntiSleepMode() == true
+
+        // 初始化防休眠按钮状态
+        updateAntiSleepButtonState(sheetBinding, isAntiSleepActive)
+
+        // 如果当前是防休眠模式，显示当前间隔
+        if (isAntiSleepActive) {
+            val task = service?.getCurrentTask() as? RefreshTask.AntiSleep
+            task?.let {
+                sheetBinding.editTextAntiSleepInterval.setText(it.intervalSeconds.toString())
+            }
+        }
+
+        // 防休眠按钮点击事件
+        sheetBinding.buttonAntiSleep.setOnClickListener {
+            val currentUrl = binding.webView.url
+            if (currentUrl.isNullOrBlank()
+                || currentUrl == "about:blank"
+                || currentUrl.startsWith("file:")) {
+                showToast(getString(R.string.toast_anti_sleep_need_page))
+                return@setOnClickListener
+            }
+
+            if (refreshService?.isAntiSleepMode() == true) {
+                // 当前是防休眠模式，关闭它
+                stopAntiSleepMode()
+                updateAntiSleepButtonState(sheetBinding, false)
+                sheetBinding.containerCurrentTask.visibility = View.GONE
+                sheetBinding.buttonCancelTask.visibility = View.GONE
+                showToast(getString(R.string.toast_anti_sleep_stopped))
+            } else {
+                // 开启防休眠模式
+                val intervalText = sheetBinding.editTextAntiSleepInterval.text.toString()
+                val intervalSeconds = intervalText.toLongOrNull()
+
+                if (intervalSeconds == null || intervalSeconds < 1 || intervalSeconds > 9999) {
+                    showToast(getString(R.string.toast_anti_sleep_invalid_interval))
+                    return@setOnClickListener
+                }
+
+                // 先停止现有任务（互斥）
+                refreshService?.stopTask()
+
+                // 启动防休眠模式
+                startAntiSleepMode(intervalSeconds)
+                updateAntiSleepButtonState(sheetBinding, true)
+
+                // 更新当前任务显示
+                updateCurrentTaskDisplay(sheetBinding)
+
+                showToast(getString(R.string.toast_anti_sleep_started))
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // 间隔/定时刷新 UI 逻辑
+        // ═══════════════════════════════════════════════════════════
 
         sheetBinding.buttonCustomInterval.setOnClickListener {
             showCustomIntervalDialog { seconds ->
@@ -962,47 +1076,20 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
         sheetBinding.radioInterval.isChecked = true
 
-        val service = refreshService
-        if (service != null && service.hasActiveTask()) {
-            sheetBinding.containerCurrentTask.visibility = View.VISIBLE
-            sheetBinding.buttonCancelTask.visibility = View.VISIBLE
+        // 显示当前任务状态
+        updateCurrentTaskDisplay(sheetBinding)
 
-            val task = service.getCurrentTask()
-            val remaining = service.getRemainingSeconds()
-
-            when (task) {
-                is RefreshTask.Interval -> {
-                    val intervalText = getIntervalDisplayText(task.intervalSeconds)
-                    sheetBinding.textViewCurrentTask.text = getString(
-                        R.string.refresh_current_task_interval,
-                        intervalText,
-                        formatSeconds(remaining)
-                    )
-                }
-                is RefreshTask.Scheduled -> {
-                    val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                    sheetBinding.textViewCurrentTask.text = getString(
-                        R.string.refresh_current_task_scheduled,
-                        timeFormat.format(Date(task.targetTimeMillis))
-                    )
-                }
-                null -> {
-                    sheetBinding.containerCurrentTask.visibility = View.GONE
-                    sheetBinding.buttonCancelTask.visibility = View.GONE
-                }
-            }
-        } else {
-            sheetBinding.containerCurrentTask.visibility = View.GONE
-            sheetBinding.buttonCancelTask.visibility = View.GONE
-        }
-
+        // 取消任务按钮
         sheetBinding.buttonCancelTask.setOnClickListener {
             refreshService?.stopTask()
             stopRefreshService()
+            updateAntiSleepButtonState(sheetBinding, false)
+            sheetBinding.containerCurrentTask.visibility = View.GONE
+            sheetBinding.buttonCancelTask.visibility = View.GONE
             showToast(getString(R.string.toast_refresh_cancelled))
-            bottomSheet.dismiss()
         }
 
+        // 确认按钮（用于间隔/定时刷新）
         sheetBinding.buttonConfirm.setOnClickListener {
             when {
                 sheetBinding.radioInterval.isChecked -> {
@@ -1014,6 +1101,12 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         return@setOnClickListener
                     }
 
+                    // 停止防休眠模式（互斥）
+                    if (refreshService?.isAntiSleepMode() == true) {
+                        refreshService?.stopTask()
+                        updateAntiSleepButtonState(sheetBinding, false)
+                    }
+
                     startIntervalRefresh(seconds)
                     showToast(getString(R.string.toast_refresh_started))
                     bottomSheet.dismiss()
@@ -1023,6 +1116,12 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                     if (time == null) {
                         showToast(getString(R.string.toast_refresh_select_time))
                     } else {
+                        // 停止防休眠模式（互斥）
+                        if (refreshService?.isAntiSleepMode() == true) {
+                            refreshService?.stopTask()
+                            updateAntiSleepButtonState(sheetBinding, false)
+                        }
+
                         startScheduledRefresh(time.timeInMillis)
                         showToast(getString(R.string.toast_refresh_started))
                         bottomSheet.dismiss()
@@ -1036,6 +1135,71 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
         refreshBottomSheet = bottomSheet
         bottomSheet.show()
+    }
+
+    /**
+     * 更新防休眠按钮的视觉状态
+     */
+    private fun updateAntiSleepButtonState(
+        sheetBinding: BottomSheetRefreshBinding,
+        isActive: Boolean
+    ) {
+        sheetBinding.buttonAntiSleep.isActivated = isActive
+        sheetBinding.buttonAntiSleep.isSelected = isActive
+        sheetBinding.buttonAntiSleep.text = if (isActive) {
+            getString(R.string.anti_sleep_on)
+        } else {
+            getString(R.string.anti_sleep_off)
+        }
+    }
+
+    /**
+     * 更新当前任务显示区域
+     */
+    private fun updateCurrentTaskDisplay(sheetBinding: BottomSheetRefreshBinding) {
+        val service = refreshService
+        if (service != null && service.hasActiveTask()) {
+            sheetBinding.containerCurrentTask.visibility = View.VISIBLE
+            sheetBinding.buttonCancelTask.visibility = View.VISIBLE
+
+            val task = service.getCurrentTask()
+            val remaining = service.getRemainingSeconds()
+
+            when (task) {
+                is RefreshTask.Interval -> {
+                    sheetBinding.textViewCurrentTaskIcon.text = getString(R.string.refresh_current_task_icon)
+                    val intervalText = getIntervalDisplayText(task.intervalSeconds)
+                    sheetBinding.textViewCurrentTask.text = getString(
+                        R.string.refresh_current_task_interval,
+                        intervalText,
+                        formatSeconds(remaining)
+                    )
+                }
+                is RefreshTask.Scheduled -> {
+                    sheetBinding.textViewCurrentTaskIcon.text = getString(R.string.refresh_current_task_icon)
+                    val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                    sheetBinding.textViewCurrentTask.text = getString(
+                        R.string.refresh_current_task_scheduled,
+                        timeFormat.format(Date(task.targetTimeMillis))
+                    )
+                }
+                is RefreshTask.AntiSleep -> {
+                    sheetBinding.textViewCurrentTaskIcon.text = getString(R.string.anti_sleep_current_task_icon)
+                    sheetBinding.textViewCurrentTask.text = getString(
+                        R.string.refresh_current_task_anti_sleep,
+                        task.intervalSeconds.toString(),
+                        formatSeconds(remaining)
+                    )
+                }
+                null -> {
+                    sheetBinding.containerCurrentTask.visibility = View.GONE
+                    sheetBinding.buttonCancelTask.visibility = View.GONE
+                }
+            }
+        } else {
+            sheetBinding.containerCurrentTask.visibility = View.GONE
+            sheetBinding.buttonCancelTask.visibility = View.GONE
+        }
     }
 
     private fun showCustomIntervalDialog(onConfirm: (Long) -> Unit) {
@@ -1134,7 +1298,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private fun startIntervalRefresh(intervalSeconds: Long) {
         val intent = Intent(this, RefreshService::class.java).apply {
             action = RefreshService.ACTION_START_TASK
-            putExtra(RefreshService.EXTRA_TASK_TYPE, "interval")
+            putExtra(RefreshService.EXTRA_TASK_TYPE, RefreshService.TASK_TYPE_INTERVAL)
             putExtra(RefreshService.EXTRA_INTERVAL_SECONDS, intervalSeconds)
         }
 
@@ -1148,7 +1312,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private fun startScheduledRefresh(targetTimeMillis: Long) {
         val intent = Intent(this, RefreshService::class.java).apply {
             action = RefreshService.ACTION_START_TASK
-            putExtra(RefreshService.EXTRA_TASK_TYPE, "scheduled")
+            putExtra(RefreshService.EXTRA_TASK_TYPE, RefreshService.TASK_TYPE_SCHEDULED)
             putExtra(RefreshService.EXTRA_TARGET_TIME, targetTimeMillis)
         }
 
@@ -1157,6 +1321,32 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         } else {
             startService(intent)
         }
+    }
+
+    /**
+     * 启动防休眠模式
+     */
+    private fun startAntiSleepMode(intervalSeconds: Long) {
+        val intent = Intent(this, RefreshService::class.java).apply {
+            action = RefreshService.ACTION_START_TASK
+            putExtra(RefreshService.EXTRA_TASK_TYPE, RefreshService.TASK_TYPE_ANTI_SLEEP)
+            putExtra(RefreshService.EXTRA_INTERVAL_SECONDS, intervalSeconds)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
+    /**
+     * 停止防休眠模式
+     */
+    private fun stopAntiSleepMode() {
+        refreshService?.stopTask()
+        stopRefreshService()
+        updateRefreshButtonState()
     }
 
     private fun stopRefreshService() {
@@ -1216,7 +1406,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                     )
                 }
                 is RefreshTask.Scheduled -> {}
-                null -> {}
+                else -> {}
             }
         }
     }
@@ -1232,6 +1422,28 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         runOnUiThread {
             binding.buttonRefresh.isActivated = false
             binding.buttonRefresh.text = getString(R.string.button_refresh_default)
+        }
+    }
+
+    /**
+     * 防休眠倒计时更新
+     */
+    override fun onAntiSleepTick(remainingSeconds: Long) {
+        runOnUiThread {
+            binding.buttonRefresh.text = getString(
+                R.string.button_anti_sleep_active,
+                formatSeconds(remainingSeconds)
+            )
+        }
+    }
+
+    /**
+     * 防休眠心跳触发 - 注入 JavaScript
+     */
+    override fun onAntiSleepHeartbeat() {
+        runOnUiThread {
+            // 注入心跳脚本
+            binding.webView.evaluateJavascript(antiSleepHeartbeatScript, null)
         }
     }
 
