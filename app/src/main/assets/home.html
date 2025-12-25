@@ -17,13 +17,12 @@
             overflow: hidden;
             background: #000000;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            /* 防止触摸时的默认行为 */
             touch-action: none;
             -webkit-user-select: none;
             user-select: none;
         }
 
-        /* 粒子画布 - 全屏背景 */
+        /* 粒子画布 */
         #particleCanvas {
             position: fixed;
             top: 0;
@@ -74,11 +73,11 @@
             text-indent: 0.15em;
         }
 
-        /* 功能区 */
+        /* 核心功能展示区 */
         .features {
             display: flex;
             gap: 40px;
-            margin-bottom: 50px;
+            margin-bottom: 60px;
         }
 
         .feature-item {
@@ -102,15 +101,58 @@
         /* 场景描述 */
         .scene {
             font-size: 13px;
-            color: rgba(255, 255, 255, 0.6);
+            color: rgba(255, 255, 255, 0.5);
             letter-spacing: 0.08em;
-            margin-bottom: 12px;
+            margin-bottom: 24px;
         }
 
-        /* 平台列表 */
-        .platforms {
+        /* 🚀 平台直达磁贴区域 */
+        .platform-tiles {
+            display: flex;
+            gap: 20px;
+            pointer-events: auto; /* 允许点击 */
+        }
+
+        .tile {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            text-decoration: none;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(4px);
+        }
+
+        /* 点击反馈 */
+        .tile:active {
+            transform: scale(0.92);
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(100, 181, 246, 0.5);
+        }
+
+        .tile-icon {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .tile-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .tile-text {
             font-size: 12px;
-            color: rgba(255, 255, 255, 0.4);
+            font-weight: 300;
+            color: rgba(255, 255, 255, 0.7);
             letter-spacing: 0.05em;
         }
 
@@ -122,20 +164,18 @@
             transform: translateX(-50%);
         }
 
-        /* GitHub 链接 - 恢复可点击 */
         .github-link {
             display: flex;
             align-items: center;
             gap: 6px;
             text-decoration: none;
-            color: rgba(255, 255, 255, 0.35);
+            color: rgba(255, 255, 255, 0.3);
             font-size: 11px;
             letter-spacing: 0.03em;
             transition: color 0.3s ease;
             pointer-events: auto;
         }
 
-        .github-link:hover,
         .github-link:active {
             color: rgba(255, 255, 255, 0.7);
         }
@@ -148,10 +188,8 @@
     </style>
 </head>
 <body>
-    <!-- 粒子画布 -->
     <canvas id="particleCanvas"></canvas>
 
-    <!-- 内容层 -->
     <div class="content">
         <h1 class="title">WebSnap</h1>
         <p class="subtitle">Keep Your Session Alive</p>
@@ -168,7 +206,42 @@
         </div>
 
         <p class="scene">专为云端虚拟机服务设计</p>
-        <p class="platforms">Firebase Studio · Colab</p>
+
+        <!-- 平台直达磁贴 -->
+        <div class="platform-tiles">
+            <!-- Firebase Studio -->
+            <a href="https://studio.firebase.google.com/" class="tile">
+                <div class="tile-icon">
+                    <svg viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M122.958 72.429c1.19.076 2.85.53 4.795.812L147.5 86l-64.553 38.395a37.042 37.042 0 0 1-7.976 1.925 40.448 40.448 0 0 1-4.175.251L46 97l52.048-20.204c-.006.007-.016.014-.026.02a70.28 70.28 0 0 1 13.35-3.575c3.767-.617 7.464-1.192 11.592-.81a1.996 1.996 0 0 0-.037-.003h.031Z" fill="#FFC400"/>
+                        <path d="M121.768 23.378a40.103 40.103 0 0 0-1.513-5.17c-1.035-2.862-3.355-9.08-9.034-14.7a34.43 34.43 0 0 0-4.149-3.505c-6.938 8.35-13.163 14.378-17.278 18.128-10.799 9.838-28.475 23.49-39.826 33.766-1.97 1.782-5.97 5.81-9.584 11.94a.263.263 0 0 0-.02.034v-.01a60.955 60.955 0 0 0-2.287 4.326c-.124.252-.25.53-.388.824a61.84 61.84 0 0 0-1.058 2.421c-1.417 3.445-3.151 7.758-3.72 13.498-.5 5.006.097 8.974.415 10.695.117.63.251 1.242.395 1.848a34.29 34.29 0 0 0 2.006 6.034c3.89 9.024 10.3 14.247 11.381 15.105 6.834 5.401 13.742 6.941 15.945 7.363a36.04 36.04 0 0 0 7.742.623.062.062 0 0 0-.007-.024h.027l-.04-.053a34.656 34.656 0 0 1-1.078-6.041c-.767-8.706 1.999-15.413 3.415-18.751 1.072-2.522 3.7-8.442 9.302-13.826 2.612-2.511 5.438-4.537 8.24-6.375 3.041-1.996 5.7-3.55 7.217-4.601.05-.03-.05.03 0 0 .056-.037.15-.097.197-.134 5.324-3.938 15.778-12.821 21.233-27.133.642-1.677 1.141-3.325 1.141-3.325 1.711-5.34 3.396-13.594 1.32-22.963l.006.006Z" fill="url(#a)"/>
+                        <path d="M70.775 126.601a36.015 36.015 0 0 1-7.742-.622c-2.203-.422-9.11-1.963-15.945-7.364-1.366-1.081-11.23-9.121-13.785-22.987-.319-1.721-.914-5.69-.416-10.695.573-5.74 2.304-10.049 3.72-13.497a61.646 61.646 0 0 1 3.734-7.575 23.896 23.896 0 0 0 2.367 4.829c2.68 4.189 5.964 6.419 8.512 8.093 1.108.727 6.285 4.048 14.12 5.793 5.308 1.182 9.5 1.122 10.92 1.075 3.184-.1 8.244-.62 13.98-2.846 3.315-1.286 5.99-2.867 7.765-3.975-1.52 1.055-4.327 2.702-7.367 4.694-2.802 1.838-5.629 3.865-8.24 6.376-5.602 5.384-8.231 11.304-9.302 13.826-1.42 3.335-4.183 10.045-3.416 18.751a34.62 34.62 0 0 0 1.098 6.114l-.003.01Z" fill="#FF9100"/>
+                        <path d="M154.939 123.866c2.37-4.745 3.408-9.751 3.408-9.751.265-1.276.643-3.157.81-5.498.151-2.096.054-5.508-.448-8.241-1.601-8.672-8.237-15.697-8.92-16.404 0 0-4.481-4.644-11.08-7.828-.968-.466-2.636-1.276-4.963-1.983-2.29-.696-4.159-.974-6.01-1.242a57.017 57.017 0 0 0-4.809-.492c.281.03.673.087 1.132.194 1.082.255 1.842.64 2.434.928.553.27 1.39.693 2.311 1.476.375.322.84.72 1.302 1.35a6.957 6.957 0 0 1 1.139 2.427c.797 3.292-1.212 6.359-1.942 7.474-5.177 7.906-33.177 24.387-49.771 41.494-4.226 4.356-7.227 8.254-9.466 13.33-5.057 11.459-3.249 22.07-2.776 24.514 3.063 15.892 14.605 24.497 17.274 26.386 8.137-9.094 15.336-16.036 20.65-20.881 13.454-12.262 30.983-25.816 30.986-25.816 0 0 13.465-10.883 18.735-21.434l.004-.003Z" fill="url(#b)"/>
+                        <defs>
+                            <linearGradient id="a" x1="43.807" y1="111.945" x2="108.827" y2="2.574" gradientUnits="userSpaceOnUse"><stop stop-color="#F8682F"/><stop offset="1" stop-color="#DD2C00"/></linearGradient>
+                            <linearGradient id="b" x1="104.657" y1="81.446" x2="97.221" y2="211.922" gradientUnits="userSpaceOnUse"><stop stop-color="#F8682F"/><stop offset=".567" stop-color="#E92A4E"/><stop offset="1" stop-color="#C447FF"/></linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <span class="tile-text">Firebase Studio</span>
+            </a>
+
+            <!-- Colab -->
+            <a href="https://colab.research.google.com/" class="tile">
+                <div class="tile-icon">
+                    <svg viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet">
+                        <g>
+                            <path d="M4.54,9.46,2.19,7.1a6.93,6.93,0,0,0,0,9.79l2.36-2.36A3.59,3.59,0,0,1,4.54,9.46Z" fill="#E8710A"></path>
+                            <path d="M2.19,7.1,4.54,9.46a3.59,3.59,0,0,1,5.08,0l1.71-2.93h0l-.1-.08h0A6.93,6.93,0,0,0,2.19,7.1Z" fill="#F9AB00"></path>
+                            <path d="M11.34,17.46h0L9.62,14.54a3.59,3.59,0,0,1-5.08,0L2.19,16.9a6.93,6.93,0,0,0,9,.65l.11-.09" fill="#F9AB00"></path>
+                            <path d="M12,7.1a6.93,6.93,0,0,0,0,9.79l2.36-2.36A3.59,3.59,0,1,1,5.08-5.08L21.81,7.1A6.93,6.93,0,0,0,12,7.1Z" fill="#F9AB00"></path>
+                            <path d="M21.81,7.1,19.46,9.46a3.59,3.59,0,0,1-5.08,5.08L12,16.9A6.93,6.93,0,0,0,21.81,7.1Z" fill="#E8710A"></path>
+                        </g>
+                    </svg>
+                </div>
+                <span class="tile-text">Google Colab</span>
+            </a>
+        </div>
 
         <div class="footer">
             <a href="https://github.com/pdahd/WebSnap" class="github-link">
@@ -182,232 +255,87 @@
 
     <script>
         // ═══════════════════════════════════════════════════════════════
-        // 粒子宇宙 - 引力星系效果
+        // 粒子宇宙逻辑 (保持原样)
         // ═══════════════════════════════════════════════════════════════
-
         const canvas = document.getElementById('particleCanvas');
         const ctx = canvas.getContext('2d');
-
-        // 配置参数
         const CONFIG = {
             particleCount: 100,
             colors: ['#64B5F6', '#E0F7FA', '#FFFFFF', '#81D4FA', '#B3E5FC'],
-            minSize: 1,
-            maxSize: 3,
-            gravityStrength: 0.00003,
-            initialSpeed: 0.3,
-            damping: 0.9995,
-            trailAlpha: 0.08,
-            // 触摸排斥参数
-            repelRadius: 150,
-            repelStrength: 0.8
+            minSize: 1, maxSize: 3, gravityStrength: 0.00003,
+            initialSpeed: 0.3, damping: 0.9995, trailAlpha: 0.08,
+            repelRadius: 150, repelStrength: 0.8
         };
+        let particles = [], centerX, centerY, pointerX = -1000, pointerY = -1000, isPointerActive = false;
 
-        // 粒子数组
-        let particles = [];
-        let centerX, centerY;
-
-        // 触摸/鼠标位置
-        let pointerX = -1000;
-        let pointerY = -1000;
-        let isPointerActive = false;
-
-        // 初始化画布尺寸
         function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            centerX = canvas.width / 2;
-            centerY = canvas.height / 2;
+            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+            centerX = canvas.width / 2; centerY = canvas.height / 2;
         }
-
-        // 创建单个粒子
         function createParticle() {
             const angle = Math.random() * Math.PI * 2;
             const distance = 100 + Math.random() * Math.max(canvas.width, canvas.height) * 0.4;
-            const x = centerX + Math.cos(angle) * distance;
-            const y = centerY + Math.sin(angle) * distance;
-
-            // 切向速度（垂直于到中心的方向）
             const tangentAngle = angle + Math.PI / 2;
             const speed = CONFIG.initialSpeed * (0.5 + Math.random() * 0.5);
-
             return {
-                x: x,
-                y: y,
-                vx: Math.cos(tangentAngle) * speed,
-                vy: Math.sin(tangentAngle) * speed,
+                x: centerX + Math.cos(angle) * distance,
+                y: centerY + Math.sin(angle) * distance,
+                vx: Math.cos(tangentAngle) * speed, vy: Math.sin(tangentAngle) * speed,
                 size: CONFIG.minSize + Math.random() * (CONFIG.maxSize - CONFIG.minSize),
                 color: CONFIG.colors[Math.floor(Math.random() * CONFIG.colors.length)],
                 alpha: 0.5 + Math.random() * 0.5
             };
         }
-
-        // 初始化所有粒子
         function initParticles() {
-            particles = [];
-            for (let i = 0; i < CONFIG.particleCount; i++) {
-                particles.push(createParticle());
-            }
+            particles = []; for (let i = 0; i < CONFIG.particleCount; i++) particles.push(createParticle());
         }
-
-        // 更新粒子位置
         function updateParticle(p) {
-            // 计算到中心的距离和方向（引力）
-            const dxCenter = centerX - p.x;
-            const dyCenter = centerY - p.y;
+            const dxCenter = centerX - p.x, dyCenter = centerY - p.y;
             const distCenterSq = dxCenter * dxCenter + dyCenter * dyCenter;
             const distCenter = Math.sqrt(distCenterSq);
-
-            // 引力加速度（F = G / r²）
             if (distCenter > 10) {
                 const force = CONFIG.gravityStrength * distCenterSq / distCenter;
-                p.vx += (dxCenter / distCenter) * force;
-                p.vy += (dyCenter / distCenter) * force;
+                p.vx += (dxCenter / distCenter) * force; p.vy += (dyCenter / distCenter) * force;
             }
-
-            // 触摸排斥效果
             if (isPointerActive) {
-                const dxPointer = p.x - pointerX;
-                const dyPointer = p.y - pointerY;
+                const dxPointer = p.x - pointerX, dyPointer = p.y - pointerY;
                 const distPointer = Math.sqrt(dxPointer * dxPointer + dyPointer * dyPointer);
-                
                 if (distPointer < CONFIG.repelRadius && distPointer > 0) {
                     const repelForce = (CONFIG.repelRadius - distPointer) / CONFIG.repelRadius * CONFIG.repelStrength;
-                    p.vx += (dxPointer / distPointer) * repelForce;
-                    p.vy += (dyPointer / distPointer) * repelForce;
+                    p.vx += (dxPointer / distPointer) * repelForce; p.vy += (dyPointer / distPointer) * repelForce;
                 }
             }
-
-            // 应用阻尼
-            p.vx *= CONFIG.damping;
-            p.vy *= CONFIG.damping;
-
-            // 更新位置
-            p.x += p.vx;
-            p.y += p.vy;
-
-            // 边界环绕
+            p.vx *= CONFIG.damping; p.vy *= CONFIG.damping;
+            p.x += p.vx; p.y += p.vy;
             const margin = 50;
-            if (p.x < -margin) p.x = canvas.width + margin;
-            if (p.x > canvas.width + margin) p.x = -margin;
-            if (p.y < -margin) p.y = canvas.height + margin;
-            if (p.y > canvas.height + margin) p.y = -margin;
+            if (p.x < -margin) p.x = canvas.width + margin; if (p.x > canvas.width + margin) p.x = -margin;
+            if (p.y < -margin) p.y = canvas.height + margin; if (p.y > canvas.height + margin) p.y = -margin;
         }
-
-        // 绘制粒子
         function drawParticle(p) {
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            ctx.fillStyle = p.color;
-            ctx.globalAlpha = p.alpha;
-            ctx.fill();
-
-            // 发光效果
-            const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 3);
-            gradient.addColorStop(0, p.color);
-            gradient.addColorStop(1, 'transparent');
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
-            ctx.fillStyle = gradient;
-            ctx.globalAlpha = p.alpha * 0.3;
-            ctx.fill();
-
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fillStyle = p.color; ctx.globalAlpha = p.alpha; ctx.fill();
+            const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 3);
+            grad.addColorStop(0, p.color); grad.addColorStop(1, 'transparent');
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
+            ctx.fillStyle = grad; ctx.globalAlpha = p.alpha * 0.3; ctx.fill();
             ctx.globalAlpha = 1;
         }
-
-        // 动画主循环
         function animate() {
-            // 半透明覆盖实现拖尾效果
             ctx.fillStyle = `rgba(0, 0, 0, ${CONFIG.trailAlpha})`;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // 更新和绘制所有粒子
-            particles.forEach(p => {
-                updateParticle(p);
-                drawParticle(p);
-            });
-
+            particles.forEach(p => { updateParticle(p); drawParticle(p); });
             requestAnimationFrame(animate);
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // 触摸/鼠标交互 - 绑定到 document 实现全屏响应
-        // ═══════════════════════════════════════════════════════════════
-
-        function handlePointerStart(x, y) {
-            pointerX = x;
-            pointerY = y;
-            isPointerActive = true;
-        }
-
-        function handlePointerMove(x, y) {
-            pointerX = x;
-            pointerY = y;
-            isPointerActive = true;
-        }
-
-        function handlePointerEnd() {
-            isPointerActive = false;
-            pointerX = -1000;
-            pointerY = -1000;
-        }
-
-        // 触摸事件
-        document.addEventListener('touchstart', (e) => {
-            const touch = e.touches[0];
-            handlePointerStart(touch.clientX, touch.clientY);
-        }, { passive: true });
-
-        document.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            const touch = e.touches[0];
-            handlePointerMove(touch.clientX, touch.clientY);
-        }, { passive: false });
-
-        document.addEventListener('touchend', () => {
-            handlePointerEnd();
-        }, { passive: true });
-
-        document.addEventListener('touchcancel', () => {
-            handlePointerEnd();
-        }, { passive: true });
-
-        // 鼠标事件（用于桌面调试）
-        document.addEventListener('mousedown', (e) => {
-            handlePointerStart(e.clientX, e.clientY);
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (isPointerActive) {
-                handlePointerMove(e.clientX, e.clientY);
-            }
-        });
-
-        document.addEventListener('mouseup', () => {
-            handlePointerEnd();
-        });
-
-        document.addEventListener('mouseleave', () => {
-            handlePointerEnd();
-        });
-
-        // 窗口大小变化时重新初始化
-        window.addEventListener('resize', () => {
-            resizeCanvas();
-        });
-
-        // ═══════════════════════════════════════════════════════════════
-        // 启动
-        // ═══════════════════════════════════════════════════════════════
-
-        resizeCanvas();
-        initParticles();
-
-        // 初始清屏
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+        document.addEventListener('touchstart', (e) => { pointerX = e.touches[0].clientX; pointerY = e.touches[0].clientY; isPointerActive = true; }, { passive: true });
+        document.addEventListener('touchmove', (e) => { pointerX = e.touches[0].clientX; pointerY = e.touches[0].clientY; }, { passive: true });
+        document.addEventListener('touchend', () => { isPointerActive = false; }, { passive: true });
+        
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas(); initParticles();
+        ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
         animate();
     </script>
 </body>
 </html>
+
