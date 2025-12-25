@@ -1,67 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 应用名称 -->
     <string name="app_name">WebSnap</string>
-
-    <!-- 地址栏 -->
     <string name="hint_enter_url">输入网址</string>
     <string name="button_go">GO</string>
-
-    <!-- 顶部按钮 -->
     <string name="button_bookmark_empty">☆</string>
     <string name="button_bookmark_filled">★</string>
     <string name="button_pc_mode">💻</string>
-
-    <!-- 底部按钮 -->
     <string name="button_back">&lt;</string>
     <string name="button_forward">&gt;</string>
     <string name="button_home">🏠</string>
     <string name="button_capture_icon">📷</string>
     <string name="button_js_notepad_icon">📝</string>
     <string name="button_refresh_default">🔄</string>
-    <string name="button_refresh_countdown">⏱️%1$s</string> <!-- 已去掉空格 -->
-    <string name="button_refresh_scheduled">🕐%1$s</string> <!-- 已补回时钟 Emoji 并去掉空格 -->
+    <string name="button_refresh_countdown">⏱️%1$s</string>
+    <string name="button_refresh_scheduled">🕐%1$s</string>
     <string name="button_refreshing">刷新中…</string>
-    <string name="button_anti_sleep_active">💓%1$s</string> <!-- 已去掉空格 -->
+    <string name="button_anti_sleep_active">💓%1$s</string>
 
-    <!-- 无障碍描述 -->
-    <string name="content_desc_back">后退</string>
-    <string name="content_desc_forward">前进</string>
-    <string name="content_desc_home">主页</string>
-    <string name="content_desc_bookmark">书签</string>
-    <string name="content_desc_pc_mode">PC 模式</string>
-    <string name="content_desc_capture">截图</string>
-    <string name="content_desc_refresh">刷新</string>
-    <string name="content_desc_delete_bookmark">删除书签</string>
-
-    <!-- Toast 提示消息 (已根据源代码全部补回) -->
     <string name="toast_url_empty">请输入网址</string>
     <string name="toast_page_not_loaded">请先加载网页</string>
     <string name="toast_capture_success">截图已保存到相册</string>
     <string name="toast_capture_failed">截图失败，请重试</string>
     <string name="toast_page_too_long">页面过长，已截取前 %1$d 像素</string>
     <string name="toast_memory_insufficient">内存不足，无法截取此页面</string>
-    <string name="toast_loading">正在加载…</string>
     <string name="toast_capture_visible">已截取当前屏幕</string>
     <string name="toast_capture_fullpage">已截取完整网页</string>
     <string name="toast_pc_mode_on">已切换到桌面模式，可双指缩放</string>
     <string name="toast_pc_mode_off">已切换到移动模式</string>
-    <string name="toast_scheme_blocked">已拦截应用跳转</string>
     <string name="toast_bookmark_added">已添加书签</string>
     <string name="toast_bookmark_removed">已移除书签</string>
     <string name="toast_bookmark_deleted">已删除「%1$s」</string>
-    <string name="toast_bookmark_exists">已在书签中</string>
     <string name="toast_bookmark_need_page">请先加载网页</string>
-    <string name="bookmark_sheet_title">📑 我的书签</string>
-    <string name="bookmark_empty_icon">📭</string>
-    <string name="bookmark_empty_hint">暂无书签\n点击 ☆ 添加当前页面</string>
-    <string name="bookmark_item_icon">🔖</string>
-    <string name="bookmark_delete_icon">✕</string>
     <string name="toast_refresh_started">已设置自动刷新</string>
     <string name="toast_refresh_cancelled">已取消自动刷新</string>
     <string name="toast_refresh_need_page">请先加载网页</string>
-    <string name="toast_refresh_select_mode">请选择刷新模式</string>
     <string name="toast_refresh_select_time">请选择刷新时间</string>
+    <string name="toast_anti_sleep_started">防休眠模式已开启</string>
+    <string name="toast_anti_sleep_stopped">防休眠模式已关闭</string>
+    <string name="toast_anti_sleep_need_page">请先加载网页</string>
+    <string name="toast_anti_sleep_invalid_interval">请输入有效的心跳间隔（1-9999秒）</string>
+    <string name="toast_invalid_interval">请输入有效的时间间隔</string>
+    <string name="toast_download_started">正在下载：%1$s</string>
+    <string name="toast_download_complete">下载完成：%1$s</string>
+    <string name="toast_download_failed">下载失败，请重试</string>
+    <string name="toast_download_unsupported">不支持的下载链接</string>
+    <string name="toast_link_copied">链接已复制到剪贴板</string>
+    <string name="toast_copy_failed">复制失败</string>
+    <string name="toast_image_saving">正在保存图片…</string>
+    <string name="toast_image_saved">图片已保存到相册</string>
+    <string name="toast_image_save_failed">图片保存失败</string>
+    <string name="toast_file_picker_error">无法打开文件选择器</string>
+    <string name="error_page_message">无法加载此页面\n%1$s</string>
+
     <string name="refresh_sheet_title">⏱️ 设置自动刷新</string>
     <string name="refresh_option_interval">间隔刷新</string>
     <string name="refresh_option_scheduled">定时刷新</string>
@@ -72,9 +62,22 @@
     <string name="refresh_current_task_icon">✅</string>
     <string name="refresh_current_task_interval">间隔刷新：每 %1$s | 倒计时 %2$s</string>
     <string name="refresh_current_task_scheduled">定时刷新：目标 %1$s</string>
+    <string name="refresh_current_task_anti_sleep">防休眠模式：每 %1$s 秒 | 下次心跳 %2$s</string>
     <string name="refresh_button_cancel">取消任务</string>
     <string name="refresh_button_confirm">确认设置</string>
     <string name="refresh_custom_interval">自定义…</string>
+    <string name="anti_sleep_title">💓 防休眠模式</string>
+    <string name="anti_sleep_off">关闭</string>
+    <string name="anti_sleep_on">开启中</string>
+    <string name="anti_sleep_description">定期向网页发送心跳信号，防止断开。不会刷新页面，不丢状态。</string>
+    <string name="anti_sleep_interval_prefix">心跳间隔</string>
+    <string name="anti_sleep_interval_suffix">秒</string>
+    <string name="anti_sleep_current_task_icon">💓</string>
+    <string name="bookmark_sheet_title">📑 我的书签</string>
+    <string name="bookmark_empty_icon">📭</string>
+    <string name="bookmark_empty_hint">暂无书签\n点击 ☆ 添加当前页面</string>
+    <string name="bookmark_item_icon">🔖</string>
+    <string name="bookmark_delete_icon">✕</string>
     <string name="dialog_custom_interval_title">自定义刷新间隔</string>
     <string name="dialog_custom_interval_hint">请输入刷新间隔时间</string>
     <string name="dialog_label_hours">小时</string>
@@ -82,51 +85,18 @@
     <string name="dialog_label_seconds">秒</string>
     <string name="dialog_button_cancel">取消</string>
     <string name="dialog_button_ok">确定</string>
-    <string name="toast_invalid_interval">请输入有效的时间间隔</string>
-    <string name="anti_sleep_title">💓 防休眠模式</string>
-    <string name="anti_sleep_off">关闭</string>
-    <string name="anti_sleep_on">开启中</string>
-    <string name="anti_sleep_description">定期向网页发送心跳信号，防止云端虚拟机（如 Colab、Firebase Studio）因长时间无操作而断开连接。不会刷新页面，不会丢失运行状态。</string>
-    <string name="anti_sleep_interval_prefix">心跳间隔</string>
-    <string name="anti_sleep_interval_suffix">秒</string>
-    <string name="toast_anti_sleep_started">防休眠模式已开启</string>
-    <string name="toast_anti_sleep_stopped">防休眠模式已关闭</string>
-    <string name="toast_anti_sleep_need_page">请先加载网页</string>
-    <string name="toast_anti_sleep_invalid_interval">请输入有效的心跳间隔（1-9999秒）</string>
-    <string name="refresh_current_task_anti_sleep">防休眠模式：每 %1$s 秒 | 下次心跳 %2$s</string>
-    <string name="anti_sleep_current_task_icon">💓</string>
-    <string name="toast_download_started">正在下载：%1$s</string>
-    <string name="toast_download_complete">下载完成：%1$s</string>
-    <string name="toast_download_failed">下载失败，请重试</string>
-    <string name="toast_download_no_permission">需要存储权限才能下载文件</string>
-    <string name="toast_download_unsupported">不支持的下载链接</string>
     <string name="menu_title_image">图片选项</string>
     <string name="menu_title_link">链接选项</string>
-    <string name="menu_title_image_link">图片/链接选项</string>
     <string name="menu_save_image">保存图片</string>
     <string name="menu_copy_image_url">复制图片链接</string>
     <string name="menu_copy_link_url">复制链接地址</string>
-    <string name="toast_image_saved">图片已保存到相册</string>
-    <string name="toast_image_save_failed">图片保存失败</string>
-    <string name="toast_image_saving">正在保存图片…</string>
-    <string name="toast_link_copied">链接已复制到剪贴板</string>
-    <string name="toast_copy_failed">复制失败</string>
-    <string name="crop_title">裁剪图片</string>
-    <string name="crop_hint">拖动边缘调整区域</string>
-    <string name="crop_button_cancel">取消</string>
-    <string name="crop_button_reset">重置</string>
-    <string name="crop_button_save">✓ 保存</string>
-    <string name="toast_crop_saved">裁剪后的图片已保存</string>
-    <string name="toast_crop_failed">保存失败，请重试</string>
-    <string name="toast_crop_cancelled">已取消</string>
-    <string name="toast_crop_no_image">没有可裁剪的图片</string>
-    <string name="toast_crop_area_too_small">裁剪区域太小</string>
-    <string name="toast_permission_camera_denied">相机权限被拒绝</string>
-    <string name="toast_permission_mic_denied">麦克风权限被拒绝</string>
-    <string name="toast_permission_storage_denied">存储权限被拒绝</string>
-    <string name="toast_permission_required">需要权限才能继续</string>
-    <string name="toast_file_picker_error">无法打开文件选择器</string>
-    <string name="error_page_title">加载失败</string>
-    <string name="error_page_message">无法加载此页面\n%1$s</string>
+    <string name="content_desc_back">后退</string>
+    <string name="content_desc_forward">前进</string>
+    <string name="content_desc_home">主页</string>
+    <string name="content_desc_bookmark">书签</string>
+    <string name="content_desc_pc_mode">PC 模式</string>
+    <string name="content_desc_capture">截图</string>
+    <string name="content_desc_refresh">刷新</string>
+    <string name="content_desc_delete_bookmark">删除书签</string>
 </resources>
 
