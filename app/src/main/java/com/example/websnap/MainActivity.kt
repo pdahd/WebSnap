@@ -407,7 +407,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private fun saveDataUrlImage(dataUrl: String) {
         try {
             val parts = dataUrl.substringAfter("data:").split(",", limit = 2)
-            if (parts.size == 2) saveImageBytes(Base64.decode(parts[1], Base64.DEFAULT), parts[0].substringBefore(";").ifBlank { "image/png" })
+            if (parts.size == 2) {
+                val mime = parts[0].substringBefore(";").ifBlank { "image/png" }
+                saveImageBytes(Base64.decode(parts[1], Base64.DEFAULT), mime)
+            }
         } catch (e: Exception) { showToast(getString(R.string.toast_image_save_failed)) }
     }
 
@@ -422,23 +425,27 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             try {
                 val conn = URL(imageUrl).openConnection() as HttpURLConnection
                 conn.doInput = true; conn.connect(); val data = conn.inputStream.readBytes()
-                runOnUiThread { saveImageBytes(data, conn.contentType ?: "image/png") }
+                val mime = conn.contentType ?: "image/png"
+                runOnUiThread { saveImageBytes(data, mime) }
             } catch (e: Exception) { runOnUiThread { showToast(getString(R.string.toast_image_save_failed)) } }
         }
     }
 
-    private fun saveImageBytes(data: ByteArray, mime: String) {
+    private fun saveImageBytes(imageData: ByteArray, mimeType: String) {
         try {
             val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-            val ext = if (mime.contains("jpeg")) ".jpg" else if (mime.contains("gif")) ".gif" else ".png"
+            val ext = if (mimeType.contains("jpeg")) ".jpg" else if (mimeType.contains("gif")) ".gif" else ".png"
             val name = "WebSnap_$ts$ext"
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val cv = ContentValues().apply { put(MediaStore.Images.Media.DISPLAY_NAME, name); put(MediaStore.Images.Media.MIME_TYPE, mime); put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/WebSnap"); put(MediaStore.Images.Media.IS_PENDING, 1) }
+                val cv = ContentValues().apply { put(MediaStore.Images.Media.DISPLAY_NAME, name); put(MediaStore.Images.Media.MIME_TYPE, mimeType); put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/WebSnap"); put(MediaStore.Images.Media.IS_PENDING, 1) }
                 val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv)
-                uri?.let { contentResolver.openOutputStream(it)?.use { os -> os.write(data) }; cv.clear(); cv.put(MediaStore.Images.Media.IS_PENDING, 0); contentResolver.update(it, cv, null, null) }
+                uri?.let {
+                    contentResolver.openOutputStream(it)?.use { os -> os.write(imageData) }
+                    cv.clear(); cv.put(MediaStore.Images.Media.IS_PENDING, 0); contentResolver.update(it, cv, null, null)
+                }
             } else {
                 val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "WebSnap")
-                if (!dir.exists()) dir.mkdirs(); FileOutputStream(File(dir, name)).use { it.write(data) }
+                if (!dir.exists()) dir.mkdirs(); FileOutputStream(File(dir, name)).use { it.write(imageData) }
             }
             showToast(getString(R.string.toast_image_saved))
         } catch (e: Exception) { showToast(getString(R.string.toast_image_save_failed)) }
@@ -450,12 +457,12 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     override fun onRequestPermissionsResult(rc: Int, p: Array<out String>, gr: IntArray) {
         super.onRequestPermissionsResult(rc, p, gr)
         if (rc == PERMISSION_REQUEST_CAMERA) pendingPermissionRequest?.let { req ->
-            val granted = mutableListOf<String>()
+            val grantedResources = mutableListOf<String>()
             for (r in req.resources) {
-                if (r == PermissionRequest.RESOURCE_VIDEO_CAPTURE && hasCameraPermission()) granted.add(r)
-                if (r == PermissionRequest.RESOURCE_AUDIO_CAPTURE && hasMicrophonePermission()) granted.add(r)
+                if (r == PermissionRequest.RESOURCE_VIDEO_CAPTURE && hasCameraPermission()) grantedResources.add(r)
+                if (r == PermissionRequest.RESOURCE_AUDIO_CAPTURE && hasMicrophonePermission()) grantedResources.add(r)
             }
-            if (granted.isNotEmpty()) req.grant(granted.toTypedArray()) else req.deny()
+            if (grantedResources.isNotEmpty()) req.grant(grantedResources.toTypedArray()) else req.deny()
             pendingPermissionRequest = null
         }
     }
