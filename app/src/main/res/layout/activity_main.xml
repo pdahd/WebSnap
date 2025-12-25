@@ -55,19 +55,18 @@
             app:backgroundTint="@null" />
 
         <Button
-            android:id="@+id/buttonBookmark"
+            android:id="@+id/buttonCapture"
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:layout_marginStart="8dp"
             android:padding="0dp"
-            android:text="@string/button_bookmark_empty"
-            android:textSize="18sp"
-            android:textColor="@color/button_text_color"
+            android:gravity="center"
+            android:text="@string/button_capture_icon"
+            android:textSize="20sp"
             android:background="@drawable/button_outline_icon"
             android:stateListAnimator="@null"
-            android:contentDescription="@string/content_desc_bookmark"
-            app:backgroundTint="@null"
-            tools:text="☆" />
+            android:contentDescription="@string/content_desc_capture"
+            app:backgroundTint="@null" />
 
         <Button
             android:id="@+id/buttonPcMode"
@@ -141,11 +140,15 @@
             app:backgroundTint="@null"
             tools:enabled="true" />
 
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="0.5" />
+
         <Button
             android:id="@+id/buttonHome"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:layout_marginStart="8dp"
             android:padding="0dp"
             android:gravity="center"
             android:text="@string/button_home"
@@ -158,43 +161,61 @@
 
         <Button
             android:id="@+id/buttonRefresh"
-            android:layout_width="0dp"
+            android:layout_width="48dp"
             android:layout_height="48dp"
-            android:layout_weight="1"
-            android:layout_marginHorizontal="8dp"
+            android:layout_marginStart="8dp"
             android:padding="0dp"
-            android:paddingBottom="3dp"
             android:gravity="center"
             android:text="@string/button_refresh_default"
-            android:fontFamily="@font/digital_7_mono"
-            android:textSize="28sp"
-            android:textStyle="bold"
-            android:textColor="@color/button_text_color_refresh"
-            android:includeFontPadding="false"
-            android:background="@drawable/button_refresh_outline"
+            android:textSize="20sp"
+            android:textColor="@color/button_text_color"
+            android:background="@drawable/button_outline_icon"
             android:stateListAnimator="@null"
             android:contentDescription="@string/content_desc_refresh"
             app:backgroundTint="@null"
-            tools:text="⏱️ 04:32" />
+            tools:text="🔄" />
 
         <Button
-            android:id="@+id/buttonCapture"
+            android:id="@+id/buttonJsNotepad"
             android:layout_width="48dp"
             android:layout_height="48dp"
+            android:layout_marginStart="8dp"
             android:padding="0dp"
             android:gravity="center"
-            android:text="@string/button_capture_icon"
+            android:text="@string/button_js_notepad"
             android:textSize="20sp"
+            android:textColor="@color/button_text_color_inverse"
+            android:background="@drawable/button_outline_icon_inverse"
+            android:stateListAnimator="@null"
+            android:contentDescription="JS Notepad"
+            app:backgroundTint="@null"
+            tools:text="📝" />
+
+        <Button
+            android:id="@+id/buttonBookmark"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:padding="0dp"
+            android:gravity="center"
+            android:text="@string/button_bookmark_empty"
+            android:textSize="20sp"
+            android:textColor="@color/button_text_color"
             android:background="@drawable/button_outline_icon"
             android:stateListAnimator="@null"
-            android:contentDescription="@string/content_desc_capture"
-            app:backgroundTint="@null" />
+            android:contentDescription="@string/content_desc_bookmark"
+            app:backgroundTint="@null"
+            tools:text="☆" />
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="0.5" />
 
         <Button
             android:id="@+id/buttonForward"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:layout_marginStart="8dp"
             android:padding="0dp"
             android:gravity="center"
             android:text="@string/button_forward"

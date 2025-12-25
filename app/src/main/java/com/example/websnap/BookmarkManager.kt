@@ -158,21 +158,33 @@ class BookmarkManager private constructor(context: Context) {
     private fun loadFromPrefs() {
         bookmarks.clear()
 
-        val jsonString = prefs.getString(KEY_BOOKMARKS, null) ?: return
+        val jsonString = prefs.getString(KEY_BOOKMARKS, null)
 
-        try {
-            val jsonArray = JSONArray(jsonString)
-            for (i in 0 until jsonArray.length()) {
-                val jsonObject = jsonArray.getJSONObject(i)
-                val bookmark = Bookmark.fromJson(jsonObject)
-                if (bookmark.url.isNotBlank()) {
-                    bookmarks.add(bookmark)
+        if (jsonString != null) {
+            try {
+                val jsonArray = JSONArray(jsonString)
+                // 仅当 JSONArray 真实存在且有内容时才解析
+                if (jsonArray.length() > 0) {
+                    for (i in 0 until jsonArray.length()) {
+                        val jsonObject = jsonArray.getJSONObject(i)
+                        val bookmark = Bookmark.fromJson(jsonObject)
+                        if (bookmark.url.isNotBlank()) {
+                            bookmarks.add(bookmark)
+                        }
+                    }
                 }
+            } catch (e: JSONException) {
+                e.printStackTrace()
+                // JSON 解析失败，清空数据
+                bookmarks.clear()
             }
-        } catch (e: JSONException) {
-            e.printStackTrace()
-            // JSON 解析失败，清空数据
-            bookmarks.clear()
+        }
+
+        // 如果加载后书签列表为空（新用户或数据损坏），则添加默认种子书签
+        if (bookmarks.isEmpty()) {
+            bookmarks.add(Bookmark("https://www.google.com", "谷歌主页"))
+            bookmarks.add(Bookmark("https://www.baidu.com", "百度主页"))
+            saveToPrefs() // 持久化种子书签
         }
     }
 

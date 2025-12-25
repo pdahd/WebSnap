@@ -189,6 +189,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         private const val PERMISSION_REQUEST_CAMERA = 1001
         private const val PERMISSION_REQUEST_MICROPHONE = 1002
         private const val PERMISSION_REQUEST_STORAGE = 1003
+
+        // JS 记事本脚本
+        private const val JS_EDITOR_SCRIPT = "javascript:(function(){var e=document.getElementById('temp-editor');if(e){e.remove();return;}var box=document.createElement('div');box.id='temp-editor';box.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:999999;padding:10px;box-sizing:border-box;display:flex;flex-direction:column;';var bar=document.createElement('div');bar.style.cssText='display:flex;gap:10px;margin-bottom:10px;';var copyBtn=document.createElement('button');copyBtn.textContent='📋 复制';copyBtn.style.cssText='padding:10px 15px;font-size:16px;border:none;border-radius:5px;background:#4CAF50;color:white;';var clearBtn=document.createElement('button');clearBtn.textContent='🗑️ 清空';clearBtn.style.cssText='padding:10px 15px;font-size:16px;border:none;border-radius:5px;background:#ff9800;color:white;';var closeBtn=document.createElement('button');closeBtn.textContent='✖ 关闭';closeBtn.style.cssText='padding:10px 15px;font-size:16px;border:none;border-radius:5px;background:#f44336;color:white;margin-left:auto;';var ta=document.createElement('textarea');ta.style.cssText='flex:1;width:100%;font-size:16px;padding:15px;box-sizing:border-box;border:none;border-radius:5px;resize:none;line-height:1.6;';ta.placeholder='在这里输入或粘贴文字...';copyBtn.onclick=function(){ta.select();navigator.clipboard.writeText(ta.value).then(function(){copyBtn.textContent='✅ 已复制';setTimeout(function(){copyBtn.textContent='📋 复制';},1500);});};clearBtn.onclick=function(){ta.value='';ta.focus();};closeBtn.onclick=function(){box.remove();};bar.appendChild(copyBtn);bar.appendChild(clearBtn);bar.appendChild(closeBtn);box.appendChild(bar);box.appendChild(ta);document.body.appendChild(box);ta.focus();})();"
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -1176,6 +1179,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     // 事件监听
     // ═══════════════════════════════════════════════════════════════
 
+    @SuppressLint("ClickableViewAccessibility")
     private fun setupListeners() {
         binding.buttonGo.setOnClickListener {
             loadUrl()
@@ -1194,6 +1198,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             }
         }
 
+        // 注意：这里的 buttonBookmark 是在底部工具栏的新位置
         binding.buttonBookmark.setOnClickListener {
             toggleBookmark()
         }
@@ -1232,6 +1237,13 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             true
         }
 
+        // 新增 JS 记事本按钮的监听器
+        val buttonJsNotepad = findViewById<Button>(R.id.buttonJsNotepad)
+        buttonJsNotepad.setOnClickListener {
+            binding.webView.evaluateJavascript(JS_EDITOR_SCRIPT, null)
+        }
+
+        // 注意：这里的 buttonCapture 是在顶部工具栏的新位置
         binding.buttonCapture.setOnClickListener {
             captureVisibleArea()
         }

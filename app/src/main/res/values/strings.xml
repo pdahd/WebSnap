@@ -17,7 +17,8 @@
     <string name="button_forward">&gt;</string>
     <string name="button_home">🏠</string>
     <string name="button_capture_icon">📷</string>
-    <string name="button_refresh_default">🔄 刷新</string>
+    <string name="button_js_notepad">📝</string>
+    <string name="button_refresh_default">🔄</string>
     <string name="button_refresh_countdown">⏱️ %1$s</string>
     <string name="button_refresh_scheduled">🕐 %1$s</string>
     <string name="button_refreshing">刷新中…</string>
