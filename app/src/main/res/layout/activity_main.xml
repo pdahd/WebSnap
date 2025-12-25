@@ -9,7 +9,6 @@
     android:background="#FFFFFF"
     tools:context=".MainActivity">
 
-    <!-- 顶部 URL 栏容器 -->
     <LinearLayout
         android:id="@+id/urlBarContainer"
         android:layout_width="0dp"
@@ -55,7 +54,6 @@
             android:stateListAnimator="@null"
             app:backgroundTint="@null" />
 
-        <!-- 调换后的截图按钮 (从底部移到这里) -->
         <Button
             android:id="@+id/buttonCapture"
             android:layout_width="48dp"
@@ -76,6 +74,7 @@
             android:layout_height="48dp"
             android:layout_marginStart="8dp"
             android:padding="0dp"
+            android:gravity="center"
             android:text="@string/button_pc_mode"
             android:textSize="16sp"
             android:background="@drawable/button_outline_icon"
@@ -110,7 +109,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- 底部工具栏容器 (已重构物理顺序) -->
     <LinearLayout
         android:id="@+id/bottomButtonContainer"
         android:layout_width="0dp"
@@ -125,7 +123,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- 1. 后退按钮 -->
         <Button
             android:id="@+id/buttonBack"
             android:layout_width="48dp"
@@ -142,7 +139,6 @@
             android:contentDescription="@string/content_desc_back"
             app:backgroundTint="@null" />
 
-        <!-- 2. 主页按钮 -->
         <Button
             android:id="@+id/buttonHome"
             android:layout_width="48dp"
@@ -158,7 +154,7 @@
             android:contentDescription="@string/content_desc_home"
             app:backgroundTint="@null" />
 
-        <!-- 3. 刷新按钮 (核心：宽长设计，承载倒计时) -->
+        <!-- 刷新按钮：去掉了 paddingBottom，保留 Wide Bar，确保居中 -->
         <Button
             android:id="@+id/buttonRefresh"
             android:layout_width="0dp"
@@ -166,7 +162,6 @@
             android:layout_weight="1"
             android:layout_marginHorizontal="8dp"
             android:padding="0dp"
-            android:paddingBottom="2dp"
             android:gravity="center"
             android:text="@string/button_refresh_default"
             android:fontFamily="@font/digital_7_mono"
@@ -179,7 +174,6 @@
             android:contentDescription="@string/content_desc_refresh"
             app:backgroundTint="@null" />
 
-        <!-- 4. 新增：JS 记事本按钮 -->
         <Button
             android:id="@+id/buttonJsNotepad"
             android:layout_width="48dp"
@@ -193,7 +187,6 @@
             android:stateListAnimator="@null"
             app:backgroundTint="@null" />
 
-        <!-- 5. 调换后的书签按钮 (从顶部移到这里) -->
         <Button
             android:id="@+id/buttonBookmark"
             android:layout_width="48dp"
@@ -207,10 +200,8 @@
             android:background="@drawable/button_outline_icon"
             android:stateListAnimator="@null"
             android:contentDescription="@string/content_desc_bookmark"
-            app:backgroundTint="@null"
-            tools:text="☆" />
+            app:backgroundTint="@null" />
 
-        <!-- 6. 前进按钮 -->
         <Button
             android:id="@+id/buttonForward"
             android:layout_width="48dp"
@@ -229,3 +220,4 @@
             app:backgroundTint="@null" />
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>
+
