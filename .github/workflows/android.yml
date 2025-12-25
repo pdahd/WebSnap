@@ -3,9 +3,9 @@ name: Android CI
 on:
   push:
     # 将 feature-crop 加入监控名单
-    branches: [ "main", "Anti-Sleep-Mode" ]
+    branches: [ "main", "gemini-3-flash" ]
   pull_request:
-    branches: [ "main", "Anti-Sleep-Mode" ]
+    branches: [ "main", "gemini-3-flash" ]
   
   # 允许手动触发构建
   workflow_dispatch:
