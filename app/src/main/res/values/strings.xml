@@ -1,11 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- 应用名称 -->
     <string name="app_name">WebSnap</string>
+
+    <!-- 地址栏 -->
     <string name="hint_enter_url">输入网址</string>
     <string name="button_go">GO</string>
+
+    <!-- 顶部按钮 -->
     <string name="button_bookmark_empty">☆</string>
     <string name="button_bookmark_filled">★</string>
     <string name="button_pc_mode">💻</string>
+
+    <!-- 底部按钮 -->
     <string name="button_back">&lt;</string>
     <string name="button_forward">&gt;</string>
     <string name="button_home">🏠</string>
@@ -17,12 +24,14 @@
     <string name="button_refreshing">刷新中…</string>
     <string name="button_anti_sleep_active">💓%1$s</string>
 
+    <!-- Toast 提示消息 (核心修正) -->
     <string name="toast_url_empty">请输入网址</string>
     <string name="toast_page_not_loaded">请先加载网页</string>
     <string name="toast_capture_success">截图已保存到相册</string>
     <string name="toast_capture_failed">截图失败，请重试</string>
     <string name="toast_page_too_long">页面过长，已截取前 %1$d 像素</string>
     <string name="toast_memory_insufficient">内存不足，无法截取此页面</string>
+    <string name="toast_loading">正在加载…</string>
     <string name="toast_capture_visible">已截取当前屏幕</string>
     <string name="toast_capture_fullpage">已截取完整网页</string>
     <string name="toast_pc_mode_on">已切换到桌面模式，可双指缩放</string>
@@ -52,6 +61,7 @@
     <string name="toast_file_picker_error">无法打开文件选择器</string>
     <string name="error_page_message">无法加载此页面\n%1$s</string>
 
+    <!-- 弹窗与列表相关 -->
     <string name="refresh_sheet_title">⏱️ 设置自动刷新</string>
     <string name="refresh_option_interval">间隔刷新</string>
     <string name="refresh_option_scheduled">定时刷新</string>
@@ -90,6 +100,20 @@
     <string name="menu_save_image">保存图片</string>
     <string name="menu_copy_image_url">复制图片链接</string>
     <string name="menu_copy_link_url">复制链接地址</string>
+
+    <!-- 裁剪界面相关 (此前丢失导致编译错误的部分) -->
+    <string name="crop_title">裁剪图片</string>
+    <string name="crop_hint">拖动边缘调整区域</string>
+    <string name="crop_button_cancel">取消</string>
+    <string name="crop_button_reset">重置</string>
+    <string name="crop_button_save">✓ 保存</string>
+    <string name="toast_crop_saved">裁剪后的图片已保存</string>
+    <string name="toast_crop_failed">保存失败，请重试</string>
+    <string name="toast_crop_cancelled">已取消</string>
+    <string name="toast_crop_no_image">没有可裁剪的图片</string>
+    <string name="toast_crop_area_too_small">裁剪区域太小</string>
+
+    <!-- 无障碍辅助 -->
     <string name="content_desc_back">后退</string>
     <string name="content_desc_forward">前进</string>
     <string name="content_desc_home">主页</string>
