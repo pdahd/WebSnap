@@ -1,21 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- 应用名称 -->
     <string name="app_name">WebSnap</string>
+
+    <!-- 地址栏 -->
     <string name="hint_enter_url">输入网址</string>
     <string name="button_go">GO</string>
+
+    <!-- 顶部按钮 -->
     <string name="button_bookmark_empty">☆</string>
     <string name="button_bookmark_filled">★</string>
     <string name="button_pc_mode">💻</string>
+
+    <!-- 底部按钮 -->
     <string name="button_back">&lt;</string>
     <string name="button_forward">&gt;</string>
     <string name="button_home">🏠</string>
     <string name="button_capture_icon">📷</string>
     <string name="button_js_notepad_icon">📝</string>
     <string name="button_refresh_default">🔄</string>
-    <string name="button_refresh_countdown">⏱️ %1$s</string>
-    <string name="button_refresh_scheduled">🕐 %1$s</string>
+    <string name="button_refresh_countdown">⏱️%1$s</string> <!-- 已去掉空格 -->
+    <string name="button_refresh_scheduled">🕐%1$s</string> <!-- 已补回时钟 Emoji 并去掉空格 -->
     <string name="button_refreshing">刷新中…</string>
-    <string name="button_anti_sleep_active">💓 %1$s</string>
+    <string name="button_anti_sleep_active">💓%1$s</string> <!-- 已去掉空格 -->
+
+    <!-- 无障碍描述 -->
     <string name="content_desc_back">后退</string>
     <string name="content_desc_forward">前进</string>
     <string name="content_desc_home">主页</string>
@@ -24,6 +33,8 @@
     <string name="content_desc_capture">截图</string>
     <string name="content_desc_refresh">刷新</string>
     <string name="content_desc_delete_bookmark">删除书签</string>
+
+    <!-- Toast 提示消息 (已根据源代码全部补回) -->
     <string name="toast_url_empty">请输入网址</string>
     <string name="toast_page_not_loaded">请先加载网页</string>
     <string name="toast_capture_success">截图已保存到相册</string>
@@ -63,13 +74,6 @@
     <string name="refresh_current_task_scheduled">定时刷新：目标 %1$s</string>
     <string name="refresh_button_cancel">取消任务</string>
     <string name="refresh_button_confirm">确认设置</string>
-    <string name="interval_10_sec">10 秒</string>
-    <string name="interval_30_sec">30 秒</string>
-    <string name="interval_1_min">1 分钟</string>
-    <string name="interval_3_min">3 分钟</string>
-    <string name="interval_5_min">5 分钟</string>
-    <string name="interval_10_min">10 分钟</string>
-    <string name="interval_30_min">30 分钟</string>
     <string name="refresh_custom_interval">自定义…</string>
     <string name="dialog_custom_interval_title">自定义刷新间隔</string>
     <string name="dialog_custom_interval_hint">请输入刷新间隔时间</string>
