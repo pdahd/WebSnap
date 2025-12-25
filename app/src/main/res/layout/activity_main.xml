@@ -50,24 +50,24 @@
             android:textSize="14sp"
             android:textStyle="bold"
             android:textColor="@color/button_text_color"
-            android:background="@drawable/button_outline"
+            android:background="@drawable/button_outline_unified"
             android:stateListAnimator="@null"
             app:backgroundTint="@null" />
 
         <Button
-            android:id="@+id/buttonBookmark"
+            android:id="@+id/buttonCapture"
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:layout_marginStart="8dp"
+            android:gravity="center"
             android:padding="0dp"
-            android:text="@string/button_bookmark_empty"
-            android:textSize="18sp"
+            android:text="@string/button_capture_icon"
             android:textColor="@color/button_text_color"
-            android:background="@drawable/button_outline_icon"
+            android:textSize="20sp"
+            android:background="@drawable/button_outline_unified"
             android:stateListAnimator="@null"
-            android:contentDescription="@string/content_desc_bookmark"
-            app:backgroundTint="@null"
-            tools:text="☆" />
+            android:contentDescription="@string/content_desc_capture"
+            app:backgroundTint="@null" />
 
         <Button
             android:id="@+id/buttonPcMode"
@@ -77,7 +77,8 @@
             android:padding="0dp"
             android:text="@string/button_pc_mode"
             android:textSize="16sp"
-            android:background="@drawable/button_outline_icon"
+            android:textColor="@color/button_text_color"
+            android:background="@drawable/button_outline_unified"
             android:stateListAnimator="@null"
             android:contentDescription="@string/content_desc_pc_mode"
             app:backgroundTint="@null"
@@ -134,7 +135,7 @@
             android:textSize="20sp"
             android:textStyle="bold"
             android:textColor="@color/button_text_color"
-            android:background="@drawable/button_outline"
+            android:background="@drawable/button_outline_unified"
             android:stateListAnimator="@null"
             android:enabled="false"
             android:contentDescription="@string/content_desc_back"
@@ -151,7 +152,7 @@
             android:text="@string/button_home"
             android:textSize="18sp"
             android:textColor="@color/button_text_color"
-            android:background="@drawable/button_outline_icon"
+            android:background="@drawable/button_outline_unified"
             android:stateListAnimator="@null"
             android:contentDescription="@string/content_desc_home"
             app:backgroundTint="@null" />
@@ -161,11 +162,11 @@
             android:layout_width="0dp"
             android:layout_height="48dp"
             android:layout_weight="1"
-            android:layout_marginHorizontal="8dp"
+            android:layout_marginStart="8dp"
             android:padding="0dp"
             android:paddingBottom="3dp"
             android:gravity="center"
-            android:text="@string/button_refresh_default"
+            android:text="🔄"
             android:fontFamily="@font/digital_7_mono"
             android:textSize="28sp"
             android:textStyle="bold"
@@ -178,17 +179,35 @@
             tools:text="⏱️ 04:32" />
 
         <Button
-            android:id="@+id/buttonCapture"
+            android:id="@+id/buttonNotepad"
             android:layout_width="48dp"
             android:layout_height="48dp"
+            android:layout_marginStart="8dp"
             android:padding="0dp"
             android:gravity="center"
-            android:text="@string/button_capture_icon"
-            android:textSize="20sp"
-            android:background="@drawable/button_outline_icon"
+            android:text="📝"
+            android:textSize="18sp"
+            android:textColor="@color/button_text_color"
+            android:background="@drawable/selector_notepad_button"
             android:stateListAnimator="@null"
-            android:contentDescription="@string/content_desc_capture"
-            app:backgroundTint="@null" />
+            app:backgroundTint="@null"
+            android:contentDescription="Notepad" />
+
+        <Button
+            android:id="@+id/buttonBookmark"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:padding="0dp"
+            android:gravity="center"
+            android:text="@string/button_bookmark_empty"
+            android:textSize="18sp"
+            android:textColor="@color/button_text_color"
+            android:background="@drawable/button_outline_unified"
+            android:stateListAnimator="@null"
+            android:contentDescription="@string/content_desc_bookmark"
+            app:backgroundTint="@null"
+            tools:text="☆" />
 
         <Button
             android:id="@+id/buttonForward"
@@ -201,7 +220,7 @@
             android:textSize="20sp"
             android:textStyle="bold"
             android:textColor="@color/button_text_color"
-            android:background="@drawable/button_outline"
+            android:background="@drawable/button_outline_unified"
             android:stateListAnimator="@null"
             android:enabled="false"
             android:contentDescription="@string/content_desc_forward"

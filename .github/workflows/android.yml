@@ -3,9 +3,9 @@ name: Android CI
 on:
   push:
     # 将 feature-crop 加入监控名单
-    branches: [ "main", "Anti-Sleep-Mode" ]
+    branches: [ "main", "Anti-Sleep-Mode", "jules-fix-20251225-v1" ]
   pull_request:
-    branches: [ "main", "Anti-Sleep-Mode" ]
+    branches: [ "main", "Anti-Sleep-Mode", "jules-fix-20251225-v1" ]
   
   # 允许手动触发构建
   workflow_dispatch:

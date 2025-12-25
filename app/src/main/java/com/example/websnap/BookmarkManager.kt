@@ -174,6 +174,12 @@ class BookmarkManager private constructor(context: Context) {
             // JSON 解析失败，清空数据
             bookmarks.clear()
         }
+
+        // 如果列表为空，则添加种子数据
+        if (bookmarks.isEmpty()) {
+            add(Bookmark("百度主页", "https://www.baidu.com"))
+            add(Bookmark("谷歌主页", "https://www.google.com"))
+        }
     }
 
     /**

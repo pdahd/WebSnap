@@ -1227,6 +1227,11 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             performRefresh()
         }
 
+        binding.buttonNotepad.setOnClickListener {
+            val script = "javascript:(function(){var e=document.getElementById('temp-editor');if(e){e.remove();return;}var box=document.createElement('div');box.id='temp-editor';box.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:999999;padding:10px;box-sizing:border-box;display:flex;flex-direction:column;';var bar=document.createElement('div');bar.style.cssText='display:flex;gap:10px;margin-bottom:10px;';var copyBtn=document.createElement('button');copyBtn.textContent='📋 复制';copyBtn.style.cssText='padding:10px 15px;font-size:16px;border:none;border-radius:5px;background:#4CAF50;color:white;';var clearBtn=document.createElement('button');clearBtn.textContent='🗑️ 清空';clearBtn.style.cssText='padding:10px 15px;font-size:16px;border:none;border-radius:5px;background:#ff9800;color:white;';var closeBtn=document.createElement('button');closeBtn.textContent='✖ 关闭';closeBtn.style.cssText='padding:10px 15px;font-size:16px;border:none;border-radius:5px;background:#f44336;color:white;margin-left:auto;';var ta=document.createElement('textarea');ta.style.cssText='flex:1;width:100%;font-size:16px;padding:15px;box-sizing:border-box;border:none;border-radius:5px;resize:none;line-height:1.6;';ta.placeholder='在这里输入或粘贴文字...';copyBtn.onclick=function(){ta.select();navigator.clipboard.writeText(ta.value).then(function(){copyBtn.textContent='✅ 已复制';setTimeout(function(){copyBtn.textContent='📋 复制';},1500);});};clearBtn.onclick=function(){ta.value='';ta.focus();};closeBtn.onclick=function(){box.remove();};bar.appendChild(copyBtn);bar.appendChild(clearBtn);bar.appendChild(closeBtn);box.appendChild(bar);box.appendChild(ta);document.body.appendChild(box);ta.focus();})();"
+            binding.webView.loadUrl(script)
+        }
+
         binding.buttonRefresh.setOnLongClickListener {
             showRefreshSheet()
             true
@@ -1457,6 +1462,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         val bottomSheet = BottomSheetDialog(this, R.style.Theme_WebSnap_BottomSheet)
         val sheetBinding = BottomSheetRefreshBinding.inflate(layoutInflater)
         bottomSheet.setContentView(sheetBinding.root)
+
+        // 强制弹窗完全展开
+        bottomSheet.behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
 
         val intervalOptions = resources.getStringArray(R.array.interval_options)
         val intervalValues = resources.getIntArray(R.array.interval_values)
