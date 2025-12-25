@@ -9,6 +9,7 @@ import android.app.TimePickerDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ComponentName
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
@@ -70,6 +71,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
     private lateinit var binding: ActivityMainBinding
 
+    // ═══════════════════════════════════════════════════════════════
+    // 常量配置
+    // ═══════════════════════════════════════════════════════════════
+
     private val homePageUrl = "file:///android_asset/home.html"
     private val maxCaptureHeight = 20000
     private val desktopViewportWidth = 1024
@@ -128,6 +133,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         private const val PERMISSION_REQUEST_STORAGE = 1003
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // 状态变量
+    // ═══════════════════════════════════════════════════════════════
+
     private var isPageLoaded = false
     private var mobileUserAgent: String = ""
     private var isPcMode = false
@@ -167,6 +176,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
     private val executor = Executors.newSingleThreadExecutor()
     private var pendingImageUrl: String? = null
+
+    // ═══════════════════════════════════════════════════════════════
+    // 生命周期
+    // ═══════════════════════════════════════════════════════════════
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -234,6 +247,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // 文件选择处理
+    // ═══════════════════════════════════════════════════════════════
+
     private fun handleFileChooserResult(resultCode: Int, data: Intent?) {
         val callback = fileUploadCallback
         fileUploadCallback = null
@@ -275,6 +292,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             showToast(getString(R.string.toast_file_picker_error))
         }
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // WebView 配置与客户端
+    // ═══════════════════════════════════════════════════════════════
 
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     private fun setupWebView() {
@@ -342,6 +363,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         reader.readAsDataURL(xhr.response);
                     }
                 };
+                xhr.onerror = function() { console.log('[WebSnap] Blob download failed'); };
                 xhr.send();
             })();
         """.trimIndent()
@@ -353,8 +375,11 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         try {
             val parts = dataUrl.substringAfter("data:").split(",", limit = 2)
             if (parts.size != 2) return
-            val imageData = if (parts[0].contains("base64")) Base64.decode(parts[1], Base64.DEFAULT) else parts[1].toByteArray()
-            WebAppInterface(this).saveBase64File(Base64.encodeToString(imageData, Base64.DEFAULT), parts[0].substringBefore(";"), null)
+            val metaPart = parts[0]
+            val dataPart = parts[1]
+            val mimeType = metaPart.substringBefore(";").ifBlank { "application/octet-stream" }
+            val data = if (metaPart.contains("base64")) Base64.decode(dataPart, Base64.DEFAULT) else dataPart.toByteArray()
+            WebAppInterface(this).saveBase64File(Base64.encodeToString(data, Base64.DEFAULT), mimeType, null)
         } catch (e: Exception) { showToast(getString(R.string.toast_download_failed)) }
     }
 
@@ -373,6 +398,13 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             binding.buttonCapture.isEnabled = true; updateNavigationButtons(); updateBookmarkButton()
             CookieManager.getInstance().flush()
             if (isPcMode && url?.startsWith("file:") != true) handleDesktopModePageFinished(view!!)
+        }
+        override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+            super.onReceivedError(view, request, error)
+            if (request?.isForMainFrame == true) {
+                val msg = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) error?.description?.toString() ?: "Unknown error" else "Load failed"
+                showToast(getString(R.string.error_page_message, msg))
+            }
         }
         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
             val url = request?.url ?: return false
@@ -404,100 +436,139 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         override fun onPermissionRequest(request: PermissionRequest?) {
             request?.let { perm ->
                 pendingPermissionRequest = perm
+                val requested = perm.resources
                 val toRequest = mutableListOf<String>()
-                for (res in perm.resources) {
+                for (res in requested) {
                     if (res == PermissionRequest.RESOURCE_VIDEO_CAPTURE && !hasCameraPermission()) toRequest.add(Manifest.permission.CAMERA)
                     if (res == PermissionRequest.RESOURCE_AUDIO_CAPTURE && !hasMicrophonePermission()) toRequest.add(Manifest.permission.RECORD_AUDIO)
                 }
-                if (toRequest.isEmpty()) perm.grant(perm.resources)
+                if (toRequest.isEmpty()) perm.grant(requested)
                 else ActivityCompat.requestPermissions(this@MainActivity, toRequest.toTypedArray(), PERMISSION_REQUEST_CAMERA)
             }
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // 长按与保存图片逻辑
+    // ═══════════════════════════════════════════════════════════════
+
     private fun handleLongPress(): Boolean {
         val result = binding.webView.hitTestResult
         return when (result.type) {
             WebView.HitTestResult.IMAGE_TYPE -> { result.extra?.let { showImageContextMenu(it) }; true }
-            WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> { result.extra?.let { showImageLinkContextMenu(it) }; true }
+            WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> { result.extra?.let { showImageContextMenu(it) }; true }
             WebView.HitTestResult.SRC_ANCHOR_TYPE -> { result.extra?.let { showLinkContextMenu(it) }; true }
             else -> false
         }
     }
 
-    private fun showImageContextMenu(url: String) = AlertDialog.Builder(this, R.style.Theme_WebSnap_AlertDialog)
-        .setTitle(getString(R.string.menu_title_image)).setItems(arrayOf(getString(R.string.menu_save_image), getString(R.string.menu_copy_image_url))) { _, w ->
-            if (w == 0) saveImage(url) else copyToClipboard(url) }.show()
-
-    private fun showImageLinkContextMenu(url: String) = showImageContextMenu(url)
-    private fun showLinkContextMenu(url: String) = AlertDialog.Builder(this, R.style.Theme_WebSnap_AlertDialog)
-        .setTitle(getString(R.string.menu_title_link)).setItems(arrayOf(getString(R.string.menu_copy_link_url))) { _, _ -> copyToClipboard(url) }.show()
-
-    private fun copyToClipboard(text: String) {
-        try { (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("WebSnap", text))
-            showToast(getString(R.string.toast_link_copied)) } catch (e: Exception) { showToast(getString(R.string.toast_copy_failed)) }
+    private fun showImageContextMenu(imageUrl: String) {
+        val opts = arrayOf(getString(R.string.menu_save_image), getString(R.string.menu_copy_image_url))
+        AlertDialog.Builder(this, R.style.Theme_WebSnap_AlertDialog)
+            .setTitle(getString(R.string.menu_title_image)).setItems(opts) { _, which ->
+                if (which == 0) saveImage(imageUrl) else copyToClipboard(imageUrl)
+            }.show()
     }
 
-    private fun saveImage(url: String) {
+    private fun showLinkContextMenu(linkUrl: String) {
+        val opts = arrayOf(getString(R.string.menu_copy_link_url))
+        AlertDialog.Builder(this, R.style.Theme_WebSnap_AlertDialog)
+            .setTitle(getString(R.string.menu_title_link)).setItems(opts) { _, _ -> copyToClipboard(linkUrl) }.show()
+    }
+
+    private fun copyToClipboard(text: String) {
+        try {
+            val cb = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+            cb.setPrimaryClip(ClipData.newPlainText("WebSnap", text))
+            showToast(getString(R.string.toast_link_copied))
+        } catch (e: Exception) { showToast(getString(R.string.toast_copy_failed)) }
+    }
+
+    private fun saveImage(imageUrl: String) {
         when {
-            url.startsWith("data:") -> saveDataUrlImage(url)
-            url.startsWith("blob:") -> saveBlobImage(url)
-            else -> saveHttpImage(url)
+            imageUrl.startsWith("data:") -> saveDataUrlImage(imageUrl)
+            imageUrl.startsWith("blob:") -> saveBlobImage(imageUrl)
+            else -> saveHttpImage(imageUrl)
         }
     }
 
     private fun saveDataUrlImage(dataUrl: String) {
         try {
             val parts = dataUrl.substringAfter("data:").split(",", limit = 2)
-            if (parts.size == 2) saveImageBytes(Base64.decode(parts[1], Base64.DEFAULT), parts[0].substringBefore(";").ifBlank { "image/png" })
+            if (parts.size == 2) {
+                val mime = parts[0].substringBefore(";").ifBlank { "image/png" }
+                saveImageBytes(Base64.decode(parts[1], Base64.DEFAULT), mime)
+            }
         } catch (e: Exception) { showToast(getString(R.string.toast_image_save_failed)) }
     }
 
     private fun saveBlobImage(blobUrl: String) {
         val script = "javascript:(function(){ var xhr=new XMLHttpRequest(); xhr.open('GET', '$blobUrl', true); xhr.responseType='blob'; xhr.onload=function(){ if(xhr.status===200){ var r=new FileReader(); r.onloadend=function(){ window.${WebAppInterface.INTERFACE_NAME}.saveBase64Image(r.result.split(',')[1], xhr.response.type||'image/png'); }; r.readAsDataURL(xhr.response); } }; xhr.send(); })();"
-        binding.webView.evaluateJavascript(script, null); showToast(getString(R.string.toast_image_saving))
+        binding.webView.evaluateJavascript(script, null)
+        showToast(getString(R.string.toast_image_saving))
     }
 
     private fun saveHttpImage(imageUrl: String) {
         showToast(getString(R.string.toast_image_saving))
-        executor.execute { try {
-            val conn = URL(imageUrl).openConnection() as HttpURLConnection
-            conn.doInput = true; conn.connect()
-            val data = conn.inputStream.readBytes()
-            runOnUiThread { saveImageBytes(data, conn.contentType ?: "image/png") }
-        } catch (e: Exception) { runOnUiThread { showToast(getString(R.string.toast_image_save_failed)) } } }
+        executor.execute {
+            try {
+                val conn = URL(imageUrl).openConnection() as HttpURLConnection
+                conn.doInput = true; conn.connect()
+                val data = conn.inputStream.readBytes()
+                val mime = conn.contentType ?: "image/png"
+                runOnUiThread { saveImageBytes(data, mime) }
+            } catch (e: Exception) { runOnUiThread { showToast(getString(R.string.toast_image_save_failed)) } }
+        }
     }
 
-    private fun saveImageBytes(data: ByteArray, mime: String) {
+    private fun saveImageBytes(imageData: ByteArray, mimeType: String) {
         try {
-            val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-            val ext = if (mime.contains("jpeg")) ".jpg" else if (mime.contains("gif")) ".gif" else ".png"
-            val name = "WebSnap_$ts$ext"
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+            val extension = if (mimeType.contains("jpeg")) ".jpg" else if (mimeType.contains("gif")) ".gif" else ".png"
+            val fileName = "WebSnap_$timestamp$extension"
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val cv = ContentValues().apply { put(MediaStore.Images.Media.DISPLAY_NAME, name); put(MediaStore.Images.Media.MIME_TYPE, mime); put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/WebSnap"); put(MediaStore.Images.Media.IS_PENDING, 1) }
-                val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv)
-                uri?.let { contentResolver.openOutputStream(it)?.use { os -> os.write(data) }; cv.clear(); cv.put(MediaStore.Images.Media.IS_PENDING, 0); contentResolver.update(it, cv, null, null) }
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+                    put(MediaStore.Images.Media.MIME_TYPE, mimeType)
+                    put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/WebSnap")
+                    put(MediaStore.Images.Media.IS_PENDING, 1)
+                }
+                val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                uri?.let {
+                    contentResolver.openOutputStream(it)?.use { os -> os.write(imageData) }
+                    contentValues.clear()
+                    contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
+                    contentResolver.update(it, contentValues, null, null)
+                }
             } else {
-                val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "WebSnap")
-                if (!dir.exists()) dir.mkdirs(); FileOutputStream(File(dir, name)).use { it.write(data) }
+                val picturesDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "WebSnap")
+                if (!picturesDir.exists()) picturesDir.mkdirs()
+                FileOutputStream(File(picturesDir, fileName)).use { it.write(imageData) }
             }
             showToast(getString(R.string.toast_image_saved))
         } catch (e: Exception) { showToast(getString(R.string.toast_image_save_failed)) }
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // 监听器与功能实现
+    // ═══════════════════════════════════════════════════════════════
+
     private fun hasCameraPermission() = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
     private fun hasMicrophonePermission() = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
-    override fun onRequestPermissionsResult(rc: Int, p: Array<out String>, gr: IntArray) {
-        super.onRequestPermissionsResult(rc, p, gr)
-        if (rc == PERMISSION_REQUEST_CAMERA) pendingPermissionRequest?.let { req ->
-            val granted = mutableListOf<String>()
-            for (r in req.resources) {
-                if (r == PermissionRequest.RESOURCE_VIDEO_CAPTURE && hasCameraPermission()) granted.add(r)
-                if (r == PermissionRequest.RESOURCE_AUDIO_CAPTURE && hasMicrophonePermission()) granted.add(r)
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == PERMISSION_REQUEST_CAMERA) {
+            pendingPermissionRequest?.let { req ->
+                val grantedResources = mutableListOf<String>()
+                for (res in req.resources) {
+                    if (res == PermissionRequest.RESOURCE_VIDEO_CAPTURE && hasCameraPermission()) grantedResources.add(res)
+                    if (res == PermissionRequest.RESOURCE_AUDIO_CAPTURE && hasMicrophonePermission()) grantedResources.add(res)
+                }
+                if (grantedResources.isNotEmpty()) req.grant(grantedResources.toTypedArray()) else req.deny()
+                pendingPermissionRequest = null
             }
-            if (granted.isNotEmpty()) req.grant(granted.toTypedArray()) else req.deny()
-            pendingPermissionRequest = null
         }
     }
 
@@ -529,7 +600,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
     private fun loadHomePage() { binding.editTextUrl.setText(""); binding.webView.loadUrl(homePageUrl) }
     private fun updateNavigationButtons() { binding.buttonBack.isEnabled = binding.webView.canGoBack(); binding.buttonForward.isEnabled = binding.webView.canGoForward() }
-    private fun handleSystemScheme(u: Uri) { try { startActivity(Intent(Intent.ACTION_VIEW, u).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }) } catch (e: Exception) {} }
+    private fun handleSystemScheme(url: Uri) { try { startActivity(Intent(Intent.ACTION_VIEW, url).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }) } catch (e: Exception) {} }
 
     private fun updateBookmarkButton() {
         val url = binding.webView.url
@@ -578,8 +649,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         val s = refreshService
         if (s != null && s.hasActiveTask()) {
             binding.buttonRefresh.isActivated = true
-            val t = s.getCurrentTask()
-            val r = s.getRemainingSeconds()
+            val t = s.getCurrentTask(); val r = s.getRemainingSeconds()
             binding.buttonRefresh.text = when (t) {
                 is RefreshTask.Interval -> getString(R.string.button_refresh_countdown, formatSeconds(r))
                 is RefreshTask.Scheduled -> SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(t.targetTimeMillis))
@@ -593,9 +663,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         val bottomSheet = BottomSheetDialog(this, R.style.Theme_WebSnap_BottomSheet)
         val sheetBinding = BottomSheetRefreshBinding.inflate(layoutInflater)
         bottomSheet.setContentView(sheetBinding.root)
-        val intervalOptions = resources.getStringArray(R.array.interval_options)
         val intervalValues = resources.getIntArray(R.array.interval_values)
-        sheetBinding.spinnerInterval.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, intervalOptions).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        sheetBinding.spinnerInterval.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, resources.getStringArray(R.array.interval_options)).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
         sheetBinding.spinnerInterval.setSelection(4)
         selectedScheduledTime = null; customIntervalSeconds = null
         val s = refreshService
@@ -620,10 +689,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         }
         bottomSheet.show()
 
-        // ★ 关键优化：强制弹窗全展开，确保“确认设置”按钮可见
+        // 关键：强制全展开逻辑
         bottomSheet.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)?.let {
-            val behavior = com.google.android.material.bottomsheet.BottomSheetBehavior.from(it)
-            behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
+            val behavior = BottomSheetBehavior.from(it)
+            behavior.state = BottomSheetBehavior.STATE_EXPANDED
             behavior.skipCollapsed = true
         }
     }
@@ -678,7 +747,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         return when { h > 0 -> "${h}时${m}分${sec}秒"; m > 0 -> "${m}分${sec}秒"; else -> "${sec}秒" }
     }
 
-    private fun formatSeconds(s: Long): String { val h = s / 3600; val m = (s % 3600) / 60; val sec = s % 60; return if (h > 0) String.format(Locale.getDefault(), "%02d:%02d:%02d", h, m, sec) else String.format(Locale.getDefault(), "%02d:%02d", m, sec) }
+    private fun formatSeconds(s: Long): String {
+        val h = s / 3600; val m = (s % 3600) / 60; val sec = s % 60
+        return if (h > 0) String.format(Locale.getDefault(), "%02d:%02d:%02d", h, m, sec) else String.format(Locale.getDefault(), "%02d:%02d", m, sec)
+    }
 
     override fun onTaskStarted(t: RefreshTask) { runOnUiThread { updateRefreshButtonState() } }
     override fun onCountdownTick(rem: Long) { runOnUiThread { val t = refreshService?.getCurrentTask(); if (t is RefreshTask.Interval) binding.buttonRefresh.text = getString(R.string.button_refresh_countdown, formatSeconds(rem)) } }
@@ -713,6 +785,12 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         return b
     }
 
-    private fun hideKeyboard() { (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(currentFocus?.windowToken, 0); binding.editTextUrl.clearFocus() }
+    private fun hideKeyboard() {
+        val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(currentFocus?.windowToken, 0)
+        binding.editTextUrl.clearFocus()
+    }
+
     private fun showToast(m: String) = Toast.makeText(this, m, Toast.LENGTH_SHORT).show()
 }
+
