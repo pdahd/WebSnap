@@ -55,6 +55,7 @@ import com.example.websnap.databinding.ActivityMainBinding
 import com.example.websnap.databinding.BottomSheetBookmarksBinding
 import com.example.websnap.databinding.BottomSheetRefreshBinding
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -69,10 +70,6 @@ import java.util.concurrent.Executors
 class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
     private lateinit var binding: ActivityMainBinding
-
-    // ═══════════════════════════════════════════════════════════════
-    // 常量配置
-    // ═══════════════════════════════════════════════════════════════
 
     private val homePageUrl = "file:///android_asset/home.html"
     private val maxCaptureHeight = 20000
@@ -132,10 +129,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         private const val PERMISSION_REQUEST_STORAGE = 1003
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // 状态变量
-    // ═══════════════════════════════════════════════════════════════
-
     private var isPageLoaded = false
     private var mobileUserAgent: String = ""
     private var isPcMode = false
@@ -174,10 +167,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private val executor = Executors.newSingleThreadExecutor()
     private var pendingImageUrl: String? = null
 
-    // ═══════════════════════════════════════════════════════════════
-    // 生命周期
-    // ═══════════════════════════════════════════════════════════════
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WebView.enableSlowWholeDocumentDraw()
@@ -186,9 +175,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         bookmarkManager = BookmarkManager.getInstance(this)
         setupWebView()
         setupListeners()
-        updateNavigationButtons()
-        updateBookmarkButton()
-        updatePcModeButton()
+        updateNavigationButtons(); updateBookmarkButton(); updatePcModeButton()
         loadHomePage()
     }
 
@@ -216,13 +203,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
     override fun onDestroy() {
         fileUploadCallback?.onReceiveValue(null); fileUploadCallback = null
-        if (isServiceBound) {
-            refreshService?.setCallback(null); unbindService(serviceConnection); isServiceBound = false
-        }
+        if (isServiceBound) { refreshService?.setCallback(null); unbindService(serviceConnection); isServiceBound = false }
         bookmarkBottomSheet?.dismiss(); refreshBottomSheet?.dismiss()
-        binding.webView.apply {
-            stopLoading(); clearHistory(); clearCache(true); loadUrl("about:blank"); removeAllViews(); destroy()
-        }
+        binding.webView.apply { stopLoading(); clearHistory(); clearCache(true); loadUrl("about:blank"); removeAllViews(); destroy() }
         executor.shutdown(); super.onDestroy()
     }
 
@@ -235,10 +218,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             else -> @Suppress("DEPRECATION") super.onBackPressed()
         }
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    // 功能辅助方法
-    // ═══════════════════════════════════════════════════════════════
 
     private fun handleFileChooserResult(resultCode: Int, data: Intent?) {
         val callback = fileUploadCallback; fileUploadCallback = null
@@ -259,10 +238,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         try {
             val allowMultiple = params?.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE
             val contentIntent = Intent(Intent.ACTION_GET_CONTENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = "*/*"; putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple) }
-            val chooserIntent = Intent.createChooser(contentIntent, null)
-            fileChooserLauncher.launch(chooserIntent)
+            fileChooserLauncher.launch(Intent.createChooser(contentIntent, null))
         } catch (e: Exception) {
-            e.printStackTrace(); fileUploadCallback?.onReceiveValue(null); fileUploadCallback = null
+            fileUploadCallback?.onReceiveValue(null); fileUploadCallback = null
             showToast(getString(R.string.toast_file_picker_error))
         }
     }
@@ -280,12 +258,12 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 userAgentString = userAgentString.replace("; wv", "")
                 mediaPlaybackRequiresUserGesture = false
             }
-            mobileUserAgent = settings.userAgentString
             webViewClient = createWebViewClient()
             webChromeClient = createWebChromeClient()
             addJavascriptInterface(WebAppInterface(this@MainActivity), WebAppInterface.INTERFACE_NAME)
             setDownloadListener { url, ua, cd, mime, cl -> handleDownload(url, ua, cd, mime, cl) }
-            setOnLongClickListener { handleLongPress(); true }
+            // ★ 核心修复：调用 handleLongPress 并根据返回值判断是否拦截
+            setOnLongClickListener { handleLongPress() }
         }
         CookieManager.getInstance().apply { setAcceptCookie(true); setAcceptThirdPartyCookies(binding.webView, true) }
     }
@@ -333,22 +311,19 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private fun createWebViewClient() = object : WebViewClient() {
         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
             super.onPageStarted(view, url, favicon)
-            isPageLoaded = false; binding.progressBar.visibility = View.VISIBLE; binding.progressBar.progress = 0
-            binding.buttonCapture.isEnabled = false
+            isPageLoaded = false; binding.progressBar.visibility = View.VISIBLE; binding.progressBar.progress = 0; binding.buttonCapture.isEnabled = false
             if (url != currentLoadingUrl) { currentLoadingUrl = url; desktopModeAppliedForCurrentPage = false }
             binding.editTextUrl.setText(if (url?.startsWith("file:") == true) "" else url)
             updateNavigationButtons(); updateBookmarkButton()
             if (isPcMode && url?.startsWith("file:") != true) view?.evaluateJavascript(desktopModeScript, null)
         }
         override fun onPageFinished(view: WebView?, url: String?) {
-            super.onPageFinished(view, url); isPageLoaded = true; binding.progressBar.visibility = View.GONE
-            binding.buttonCapture.isEnabled = true; updateNavigationButtons(); updateBookmarkButton()
-            CookieManager.getInstance().flush()
+            super.onPageFinished(view, url); isPageLoaded = true; binding.progressBar.visibility = View.GONE; binding.buttonCapture.isEnabled = true
+            updateNavigationButtons(); updateBookmarkButton(); CookieManager.getInstance().flush()
             if (isPcMode && url?.startsWith("file:") != true) handleDesktopModePageFinished(view!!)
         }
         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-            val url = request?.url ?: return false
-            val scheme = url.scheme?.lowercase() ?: return false
+            val url = request?.url ?: return false; val scheme = url.scheme?.lowercase() ?: return false
             desktopModeAppliedForCurrentPage = false
             return if (scheme in webViewSchemes) false else { handleSystemScheme(url); true }
         }
@@ -369,8 +344,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
     private fun createWebChromeClient() = object : WebChromeClient() {
         override fun onProgressChanged(view: WebView?, newProgress: Int) {
-            binding.progressBar.progress = newProgress
-            if (newProgress >= 100) binding.progressBar.visibility = View.GONE
+            binding.progressBar.progress = newProgress; if (newProgress >= 100) binding.progressBar.visibility = View.GONE
         }
         override fun onReceivedTitle(view: WebView?, title: String?) { currentPageTitle = title ?: "" }
         override fun onShowFileChooser(v: WebView?, f: ValueCallback<Array<Uri>>?, p: FileChooserParams?): Boolean {
@@ -378,8 +352,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         }
         override fun onPermissionRequest(request: PermissionRequest?) {
             request?.let { perm ->
-                pendingPermissionRequest = perm
-                val toRequest = mutableListOf<String>()
+                pendingPermissionRequest = perm; val toRequest = mutableListOf<String>()
                 for (res in perm.resources) {
                     if (res == PermissionRequest.RESOURCE_VIDEO_CAPTURE && !hasCameraPermission()) toRequest.add(Manifest.permission.CAMERA)
                     if (res == PermissionRequest.RESOURCE_AUDIO_CAPTURE && !hasMicrophonePermission()) toRequest.add(Manifest.permission.RECORD_AUDIO)
@@ -391,15 +364,21 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // 长按与图片处理
+    // 长按拦截与放行逻辑 (解决选区与气泡丢失问题)
     // ═══════════════════════════════════════════════════════════════
 
     private fun handleLongPress(): Boolean {
         val result = binding.webView.hitTestResult
         return when (result.type) {
-            WebView.HitTestResult.IMAGE_TYPE, WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> { result.extra?.let { showImageContextMenu(it) }; true }
-            WebView.HitTestResult.SRC_ANCHOR_TYPE -> { result.extra?.let { showLinkContextMenu(it) }; true }
-            else -> false
+            WebView.HitTestResult.IMAGE_TYPE, WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> {
+                result.extra?.let { showImageContextMenu(it) }
+                true // 拦截：由原生处理图片保存
+            }
+            WebView.HitTestResult.SRC_ANCHOR_TYPE -> {
+                result.extra?.let { showLinkContextMenu(it) }
+                true // 拦截：由原生处理链接保存
+            }
+            else -> false // ★ 放行：让系统处理文字选区、复制、粘贴气泡
         }
     }
 
@@ -452,25 +431,25 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         }
     }
 
-    private fun saveImageBytes(data: ByteArray, mime: String) {
+    private fun saveImageBytes(imageData: ByteArray, mimeType: String) {
         try {
             val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-            val ext = if (mime.contains("jpeg")) ".jpg" else if (mime.contains("gif")) ".gif" else ".png"
+            val ext = if (mimeType.contains("jpeg")) ".jpg" else if (mimeType.contains("gif")) ".gif" else ".png"
             val name = "WebSnap_$ts$ext"
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val cv = ContentValues().apply { put(MediaStore.Images.Media.DISPLAY_NAME, name); put(MediaStore.Images.Media.MIME_TYPE, mime); put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/WebSnap"); put(MediaStore.Images.Media.IS_PENDING, 1) }
+                val cv = ContentValues().apply { put(MediaStore.Images.Media.DISPLAY_NAME, name); put(MediaStore.Images.Media.MIME_TYPE, mimeType); put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/WebSnap"); put(MediaStore.Images.Media.IS_PENDING, 1) }
                 val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv)
-                uri?.let { contentResolver.openOutputStream(it)?.use { os -> os.write(data) }; cv.clear(); cv.put(MediaStore.Images.Media.IS_PENDING, 0); contentResolver.update(it, cv, null, null) }
+                uri?.let { contentResolver.openOutputStream(it)?.use { os -> os.write(imageData) }; cv.clear(); cv.put(MediaStore.Images.Media.IS_PENDING, 0); contentResolver.update(it, cv, null, null) }
             } else {
                 val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "WebSnap")
-                if (!dir.exists()) dir.mkdirs(); FileOutputStream(File(dir, name)).use { it.write(data) }
+                if (!dir.exists()) dir.mkdirs(); FileOutputStream(File(dir, name)).use { it.write(imageData) }
             }
             showToast(getString(R.string.toast_image_saved))
         } catch (e: Exception) { showToast(getString(R.string.toast_image_save_failed)) }
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // 权限与监听
+    // 权限与监听器
     // ═══════════════════════════════════════════════════════════════
 
     private fun hasCameraPermission() = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
@@ -505,10 +484,12 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         binding.buttonCapture.setOnClickListener { captureVisibleArea() }
         binding.buttonCapture.setOnLongClickListener { captureWholePage(); true }
 
-        // ★ 已恢复为最初提供的原始 JS 代码（去除了所有自适应逻辑）
+        // ★ 记事本逻辑修正：白底黑字，防止百度等深色网站污染背景
         binding.buttonJsNotepad.setOnClickListener {
             val jsCode = """
-                javascript:(function(){var e=document.getElementById('temp-editor');if(e){e.remove();return;}var box=document.createElement('div');box.id='temp-editor';box.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:999999;padding:10px;box-sizing:border-box;display:flex;flex-direction:column;';var bar=document.createElement('div');bar.style.cssText='display:flex;gap:10px;margin-bottom:10px;';var copyBtn=document.createElement('button');copyBtn.textContent='📋 复制';copyBtn.style.cssText='padding:10px 15px;font-size:16px;border:none;border-radius:5px;background:#4CAF50;color:white;';var clearBtn=document.createElement('button');clearBtn.textContent='🗑️ 清空';clearBtn.style.cssText='padding:10px 15px;font-size:16px;border:none;border-radius:5px;background:#ff9800;color:white;';var closeBtn=document.createElement('button');closeBtn.textContent='✖ 关闭';closeBtn.style.cssText='padding:10px 15px;font-size:16px;border:none;border-radius:5px;background:#f44336;color:white;margin-left:auto;';var ta=document.createElement('textarea');ta.style.cssText='flex:1;width:100%;font-size:16px;padding:15px;box-sizing:border-box;border:none;border-radius:5px;resize:none;line-height:1.6;';ta.placeholder='在这里输入或粘贴文字...';copyBtn.onclick=function(){ta.select();navigator.clipboard.writeText(ta.value).then(function(){copyBtn.textContent='✅ 已复制';setTimeout(function(){copyBtn.textContent='📋 复制';},1500);});};clearBtn.onclick=function(){ta.value='';ta.focus();};closeBtn.onclick=function(){box.remove();};bar.appendChild(copyBtn);bar.appendChild(clearBtn);bar.appendChild(closeBtn);box.appendChild(bar);box.appendChild(ta);document.body.appendChild(box);ta.focus();})();
+                javascript:(function(){var e=document.getElementById('temp-editor');if(e){e.remove();return;}var box=document.createElement('div');box.id='temp-editor';box.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:999999;padding:10px;box-sizing:border-box;display:flex;flex-direction:column;';var bar=document.createElement('div');bar.style.cssText='display:flex;gap:10px;margin-bottom:10px;';var copyBtn=document.createElement('button');copyBtn.textContent='📋 复制';copyBtn.style.cssText='padding:10px 15px;font-size:16px;border:none;border-radius:5px;background:#4CAF50;color:white;';var clearBtn=document.createElement('button');clearBtn.textContent='🗑️ 清空';clearBtn.style.cssText='padding:10px 15px;font-size:16px;border:none;border-radius:5px;background:#ff9800;color:white;';var closeBtn=document.createElement('button');closeBtn.textContent='✖ 关闭';closeBtn.style.cssText='padding:10px 15px;font-size:16px;border:none;border-radius:5px;background:#f44336;color:white;margin-left:auto;';var ta=document.createElement('textarea');
+                ta.style.cssText='flex:1;width:100%;font-size:16px;padding:15px;box-sizing:border-box;border:none;border-radius:5px;resize:none;line-height:1.6;background:#ffffff;color:#000000;';
+                ta.placeholder='在这里输入或粘贴文字...';copyBtn.onclick=function(){ta.select();navigator.clipboard.writeText(ta.value).then(function(){copyBtn.textContent='✅ 已复制';setTimeout(function(){copyBtn.textContent='📋 复制';},1500);});};clearBtn.onclick=function(){ta.value='';ta.focus();};closeBtn.onclick=function(){box.remove();};bar.appendChild(copyBtn);bar.appendChild(clearBtn);bar.appendChild(closeBtn);box.appendChild(bar);box.appendChild(ta);document.body.appendChild(box);ta.focus();})();
             """.trimIndent()
             binding.webView.evaluateJavascript(jsCode, null)
         }
@@ -549,21 +530,17 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private fun togglePcMode() {
         isPcMode = !isPcMode; updatePcModeButton()
         binding.webView.settings.apply { userAgentString = if (isPcMode) desktopUserAgent else mobileUserAgent; useWideViewPort = true; loadWithOverviewMode = !isPcMode }
-        val url = binding.webView.url
-        if (!url.isNullOrBlank() && url != "about:blank" && !url.startsWith("file:")) binding.webView.reload()
+        val url = binding.webView.url; if (!url.isNullOrBlank() && url != "about:blank" && !url.startsWith("file:")) binding.webView.reload()
     }
 
     private fun performRefresh() {
-        val url = binding.webView.url
-        if (url.isNullOrBlank() || url == "about:blank") { showToast(getString(R.string.toast_refresh_need_page)); return }
-        binding.webView.reload()
+        val url = binding.webView.url; if (url.isNullOrBlank() || url == "about:blank") { showToast(getString(R.string.toast_refresh_need_page)); return }; binding.webView.reload()
     }
 
     private fun updateRefreshButtonState() {
         val s = refreshService
         if (s != null && s.hasActiveTask()) {
-            binding.buttonRefresh.isActivated = true
-            val t = s.getCurrentTask(); val r = s.getRemainingSeconds()
+            binding.buttonRefresh.isActivated = true; val t = s.getCurrentTask(); val r = s.getRemainingSeconds()
             binding.buttonRefresh.text = when (t) {
                 is RefreshTask.Interval -> getString(R.string.button_refresh_countdown, formatSeconds(r))
                 is RefreshTask.Scheduled -> "🕐" + SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(t.targetTimeMillis))
@@ -577,8 +554,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         val bs = BottomSheetDialog(this, R.style.Theme_WebSnap_BottomSheet); val b = BottomSheetRefreshBinding.inflate(layoutInflater); bs.setContentView(b.root)
         val vals = resources.getIntArray(R.array.interval_values)
         b.spinnerInterval.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, resources.getStringArray(R.array.interval_options)).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
-        b.spinnerInterval.setSelection(4)
-        selectedScheduledTime = null; customIntervalSeconds = null
+        b.spinnerInterval.setSelection(4); selectedScheduledTime = null; customIntervalSeconds = null
         val s = refreshService; val isA = s?.isAntiSleepMode() == true; updateAntiSleepButtonState(b, isA)
         if (isA) (s?.getCurrentTask() as? RefreshTask.AntiSleep)?.let { b.editTextAntiSleepInterval.setText(it.intervalSeconds.toString()) }
         b.buttonAntiSleep.setOnClickListener {
@@ -597,8 +573,12 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             if (b.radioInterval.isChecked) { val sec = customIntervalSeconds ?: vals[b.spinnerInterval.selectedItemPosition].toLong(); if (refreshService?.isAntiSleepMode() == true) refreshService?.stopTask(); startIntervalRefresh(sec); bs.dismiss() }
             else if (b.radioScheduled.isChecked) { selectedScheduledTime?.let { if (refreshService?.isAntiSleepMode() == true) refreshService?.stopTask(); startScheduledRefresh(it.timeInMillis); bs.dismiss() } ?: showToast(getString(R.string.toast_refresh_select_time)) }
         }
-        // ★ 核心修复：删除了 Jules 添加的 BottomSheetBehavior 强制全展开逻辑，完全回归源代码行为
         bs.show()
+        // ★ 弹窗修正：强制全展开逻辑，解决由于内容变高导致的显示不全
+        bs.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)?.let {
+            val behavior = BottomSheetBehavior.from(it)
+            behavior.state = BottomSheetBehavior.STATE_EXPANDED; behavior.skipCollapsed = true
+        }
     }
 
     private fun updateAntiSleepButtonState(sb: BottomSheetRefreshBinding, act: Boolean) { sb.buttonAntiSleep.isActivated = act; sb.buttonAntiSleep.isSelected = act; sb.buttonAntiSleep.text = if (act) getString(R.string.anti_sleep_on) else getString(R.string.anti_sleep_off) }
@@ -669,8 +649,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     }
 
     private fun getEffectiveScale() = if (isPcMode) binding.webView.width.toFloat() / desktopViewportWidth.toFloat() else @Suppress("DEPRECATION") binding.webView.scale
-    private fun captureVisibleArea() { if (!isPageLoaded) { showToast(getString(R.string.toast_page_not_loaded)); return }; binding.buttonCapture.isEnabled = false; binding.webView.post { try { captureVisibleBitmap()?.let { CropBitmapHolder.set(it, false); showToast(getString(R.string.toast_capture_visible)); startActivity(Intent(this, CropActivity::class.java)) } ?: showToast(getString(R.string.toast_capture_failed)) } finally { binding.buttonCapture.isEnabled = true } } }
-    private fun captureWholePage() { if (!isPageLoaded) { showToast(getString(R.string.toast_page_not_loaded)); return }; binding.buttonCapture.isEnabled = false; binding.webView.post { try { captureFullPageBitmap()?.let { CropBitmapHolder.set(it, true); showToast(getString(R.string.toast_capture_fullpage)); startActivity(Intent(this, CropActivity::class.java)) } ?: showToast(getString(R.string.toast_capture_failed)) } finally { binding.buttonCapture.isEnabled = true } } }
+    private fun captureVisibleArea() { if (!isPageLoaded) { showToast(getString(R.string.toast_page_not_loaded)); return }; binding.buttonCapture.isEnabled = false; binding.webView.post { try { captureVisibleBitmap()?.let { CropBitmapHolder.set(it, false); showToast(getString(R.string.toast_capture_success)); startActivity(Intent(this, CropActivity::class.java)) } ?: showToast(getString(R.string.toast_capture_failed)) } finally { binding.buttonCapture.isEnabled = true } } }
+    private fun captureWholePage() { if (!isPageLoaded) { showToast(getString(R.string.toast_page_not_loaded)); return }; binding.buttonCapture.isEnabled = false; binding.webView.post { try { captureFullPageBitmap()?.let { CropBitmapHolder.set(it, true); showToast(getString(R.string.toast_capture_success)); startActivity(Intent(this, CropActivity::class.java)) } ?: showToast(getString(R.string.toast_capture_failed)) } finally { binding.buttonCapture.isEnabled = true } } }
 
     private fun captureVisibleBitmap(): Bitmap? {
         val w = binding.webView.width; val h = binding.webView.height; if (w <= 0 || h <= 0) return null
@@ -679,8 +659,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
     private fun captureFullPageBitmap(): Bitmap? {
         val s = getEffectiveScale(); val w = binding.webView.width; var h = (binding.webView.contentHeight * s).toInt()
-        if (w <= 0 || h <= 0) return null
-        if (h > maxCaptureHeight) h = maxCaptureHeight
+        if (w <= 0 || h <= 0) return null; if (h > maxCaptureHeight) h = maxCaptureHeight
         val b: Bitmap?; val old = binding.webView.layerType; binding.webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
         try { b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888); binding.webView.draw(Canvas(b)) } finally { binding.webView.setLayerType(old, null) }
         return b
