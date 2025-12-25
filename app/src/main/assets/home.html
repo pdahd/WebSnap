@@ -56,7 +56,7 @@
         }
 
         @keyframes breathe {
-            0%, 100% { opacity: 0.9; }
+            0%, 100% { opacity: 0.8; }
             50% { opacity: 1; }
         }
 
@@ -102,50 +102,60 @@
 
         .platform-tiles {
             display: flex;
-            gap: 20px;
+            gap: 24px;
             pointer-events: auto;
         }
 
+        /* 🚀 磁贴基础样式 */
         .tile {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            width: 135px; /* 稍微调宽以适应更优比例 */
-            height: 120px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
+            width: 135px;
+            height: 125px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
             text-decoration: none;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            backdrop-filter: blur(4px);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(6px);
+            /* 注入呼吸动画 */
+            animation: tileFloat 6s ease-in-out infinite;
+        }
+
+        /* Firebase 磁贴呼吸稍微错开一点频率，增加灵动感 */
+        .tile:nth-child(1) { animation-delay: 0s; }
+        .tile:nth-child(2) { animation-delay: -3s; }
+
+        @keyframes tileFloat {
+            0%, 100% { transform: translateY(0); border-color: rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.03); }
+            50% { transform: translateY(-8px); border-color: rgba(100, 181, 246, 0.3); background: rgba(255, 255, 255, 0.06); }
         }
 
         .tile:active {
-            transform: scale(0.92);
-            background: rgba(255, 255, 255, 0.15);
-            border-color: rgba(100, 181, 246, 0.5);
+            transform: scale(0.9) !important; /* 点击时取消呼吸偏移 */
+            background: rgba(255, 255, 255, 0.12);
         }
 
         .tile-icon {
-            width: 52px; /* 稍微调大，让图标更醒目 */
+            width: 52px;
             height: 52px;
             margin-bottom: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
+            transition: transform 0.4s ease;
         }
 
-        .tile-icon svg {
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
+        .tile:hover .tile-icon { transform: scale(1.1); }
+
+        .tile-icon svg { width: 100%; height: 100%; display: block; }
 
         .tile-text {
             font-size: 12px;
             font-weight: 300;
-            color: rgba(255, 255, 255, 0.7);
+            color: rgba(255, 255, 255, 0.6);
             letter-spacing: 0.05em;
         }
 
@@ -168,15 +178,8 @@
             pointer-events: auto;
         }
 
-        .github-link:active {
-            color: rgba(255, 255, 255, 0.7);
-        }
-
-        .github-logo {
-            width: 16px;
-            height: 16px;
-            fill: currentColor;
-        }
+        .github-link:active { color: rgba(255, 255, 255, 0.7); }
+        .github-logo { width: 16px; height: 16px; fill: currentColor; }
     </style>
 </head>
 <body>
@@ -217,7 +220,7 @@
                 <span class="tile-text">Firebase Studio</span>
             </a>
 
-            <!-- Google Colab (完全恢复 5 段式原始几何路径) -->
+            <!-- Google Colab -->
             <a href="https://colab.research.google.com/" class="tile">
                 <div class="tile-icon">
                     <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -243,82 +246,113 @@
     </div>
 
     <script>
+        // ═══════════════════════════════════════════════════════════════
+        // 【方案 A：流体量子纠缠】逻辑实现
+        // ═══════════════════════════════════════════════════════════════
         const canvas = document.getElementById('particleCanvas');
         const ctx = canvas.getContext('2d');
+        
         const CONFIG = {
-            particleCount: 100,
-            colors: ['#64B5F6', '#E0F7FA', '#FFFFFF', '#81D4FA', '#B3E5FC'],
-            minSize: 1, maxSize: 3, gravityStrength: 0.00003,
-            initialSpeed: 0.3, damping: 0.9995, trailAlpha: 0.08,
-            repelRadius: 150, repelStrength: 0.8
+            particleCount: 120, // 增加粒子密度以增强连线感
+            colors: ['#64B5F6', '#E0F7FA', '#FFFFFF', '#81D4FA'],
+            maxDistance: 100, // 连线的最大距离
+            gravityStrength: 0.00005,
+            initialSpeed: 0.4,
+            damping: 0.999,
+            mouseRadius: 180, // 手势感应半径
+            mouseStrength: 1.2 // 手势吸引力度
         };
+
         let particles = [], centerX, centerY, pointerX = -1000, pointerY = -1000, isPointerActive = false;
 
         function resizeCanvas() {
             canvas.width = window.innerWidth; canvas.height = window.innerHeight;
             centerX = canvas.width / 2; centerY = canvas.height / 2;
         }
-        function createParticle() {
-            const angle = Math.random() * Math.PI * 2;
-            const distance = 100 + Math.random() * Math.max(canvas.width, canvas.height) * 0.4;
-            const tangentAngle = angle + Math.PI / 2;
-            const speed = CONFIG.initialSpeed * (0.5 + Math.random() * 0.5);
-            return {
-                x: centerX + Math.cos(angle) * distance, y: centerY + Math.sin(angle) * distance,
-                vx: Math.cos(tangentAngle) * speed, vy: Math.sin(tangentAngle) * speed,
-                size: CONFIG.minSize + Math.random() * (CONFIG.maxSize - CONFIG.minSize),
-                color: CONFIG.colors[Math.floor(Math.random() * CONFIG.colors.length)],
-                alpha: 0.5 + Math.random() * 0.5
-            };
-        }
-        function initParticles() {
-            particles = []; for (let i = 0; i < CONFIG.particleCount; i++) particles.push(createParticle());
-        }
-        function updateParticle(p) {
-            const dxCenter = centerX - p.x, dyCenter = centerY - p.y;
-            const distCenterSq = dxCenter * dxCenter + dyCenter * dyCenter;
-            const distCenter = Math.sqrt(distCenterSq);
-            if (distCenter > 10) {
-                const force = CONFIG.gravityStrength * distCenterSq / distCenter;
-                p.vx += (dxCenter / distCenter) * force; p.vy += (dyCenter / distCenter) * force;
+
+        class Particle {
+            constructor() {
+                this.reset();
             }
-            if (isPointerActive) {
-                const dxPointer = p.x - pointerX, dyPointer = p.y - pointerY;
-                const distPointer = Math.sqrt(dxPointer * dxPointer + dyPointer * dyPointer);
-                if (distPointer < CONFIG.repelRadius && distPointer > 0) {
-                    const repelForce = (CONFIG.repelRadius - distPointer) / CONFIG.repelRadius * CONFIG.repelStrength;
-                    p.vx += (dxPointer / distPointer) * repelForce; p.vy += (dyPointer / distPointer) * repelForce;
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.vx = (Math.random() - 0.5) * CONFIG.initialSpeed;
+                this.vy = (Math.random() - 0.5) * CONFIG.initialSpeed;
+                this.size = 1 + Math.random() * 2;
+                this.color = CONFIG.colors[Math.floor(Math.random() * CONFIG.colors.length)];
+                this.alpha = 0.3 + Math.random() * 0.5;
+            }
+            update() {
+                // 基础漂移
+                this.x += this.vx; this.y += this.vy;
+
+                // 手势引力网
+                if (isPointerActive) {
+                    const dx = pointerX - this.x;
+                    const dy = pointerY - this.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < CONFIG.mouseRadius) {
+                        const force = (CONFIG.mouseRadius - dist) / CONFIG.mouseRadius;
+                        this.vx += dx / dist * force * 0.05 * CONFIG.mouseStrength;
+                        this.vy += dy / dist * force * 0.05 * CONFIG.mouseStrength;
+                    }
+                }
+
+                this.vx *= CONFIG.damping; this.vy *= CONFIG.damping;
+
+                // 边界反弹
+                if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
+                if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
+            }
+            draw() {
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = this.color; ctx.globalAlpha = this.alpha; ctx.fill();
+            }
+        }
+
+        function init() {
+            particles = []; for (let i = 0; i < CONFIG.particleCount; i++) particles.push(new Particle());
+        }
+
+        function drawLines() {
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const p1 = particles[i]; const p2 = particles[j];
+                    const dx = p1.x - p2.x; const dy = p1.y - p2.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < CONFIG.maxDistance) {
+                        ctx.beginPath();
+                        ctx.moveTo(p1.x, p1.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        // 连线透明度随距离递减
+                        const alpha = (1 - dist / CONFIG.maxDistance) * 0.25;
+                        ctx.strokeStyle = '#64B5F6';
+                        ctx.globalAlpha = alpha;
+                        ctx.lineWidth = 0.8;
+                        ctx.stroke();
+                    }
                 }
             }
-            p.vx *= CONFIG.damping; p.vy *= CONFIG.damping;
-            p.x += p.vx; p.y += p.vy;
-            const margin = 50;
-            if (p.x < -margin) p.x = canvas.width + margin; if (p.x > canvas.width + margin) p.x = -margin;
-            if (p.y < -margin) p.y = canvas.height + margin; if (p.y > canvas.height + margin) p.y = -margin;
         }
-        function drawParticle(p) {
-            ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            ctx.fillStyle = p.color; ctx.globalAlpha = p.alpha; ctx.fill();
-            const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 3);
-            grad.addColorStop(0, p.color); grad.addColorStop(1, 'transparent');
-            ctx.beginPath(); ctx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
-            ctx.fillStyle = grad; ctx.globalAlpha = p.alpha * 0.3; ctx.fill();
-            ctx.globalAlpha = 1;
-        }
+
         function animate() {
-            ctx.fillStyle = `rgba(0, 0, 0, ${CONFIG.trailAlpha})`; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            particles.forEach(p => { updateParticle(p); drawParticle(p); });
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawLines();
+            particles.forEach(p => { p.update(); p.draw(); });
             requestAnimationFrame(animate);
         }
 
         document.addEventListener('touchstart', (e) => { pointerX = e.touches[0].clientX; pointerY = e.touches[0].clientY; isPointerActive = true; }, { passive: true });
         document.addEventListener('touchmove', (e) => { pointerX = e.touches[0].clientX; pointerY = e.touches[0].clientY; }, { passive: true });
         document.addEventListener('touchend', () => { isPointerActive = false; }, { passive: true });
-        
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas(); initParticles();
-        ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        animate();
+
+        window.addEventListener('resize', () => { resizeCanvas(); init(); });
+        resizeCanvas(); init(); animate();
     </script>
 </body>
 </html>
