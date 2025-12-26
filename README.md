@@ -5,3 +5,6 @@ Android WebView Long Screenshot Tool.
 ![Views](https://komarev.com/ghpvc/?user=pdahd&repo=WebSnap&color=blue)
 ![Kotlin](https://img.shields.io/badge/language-Kotlin-purple)
 
+![Views](https://komarev.com/ghpvc/?user=pdahd&repo=WebSnap&color=green)
+
+
