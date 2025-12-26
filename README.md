@@ -53,29 +53,7 @@ WebSnap 允许你在安卓设备上轻松截取完整的网页长图。
 
 ![Languages](https://metrics.lecoq.io/pdahd?template=repository&base=0&plugin_languages=1&plugin_languages_details=percentage&plugin_languages_sections=most-used)
 
-<hr>
 
-### 📈 活跃度分析
-<!-- 这里放你的方案 A (曲线图) -->
-![Activity Graph](https://github-readme-activity-graph.vercel.app/graph?username=pdahd&theme=react&bg_color=1F222E&color=5865F2)
-
-<hr>
-
-### 💻 技术栈统计
-<!-- 替换后的稳定版语言统计 -->
-![Languages](https://metrics.lecoq.io/pdahd?template=repository&base=0&plugin_languages=1&plugin_languages_details=percentage)
-
-<hr>
-
-### 🏆 全能看板
-<!-- 你的方案 C (仪表盘) -->
-![Metrics](https://metrics.lecoq.io/pdahd?template=classic&base=header%2C%20activity)
-
-![Achievements](https://metrics.lecoq.io/pdahd?template=classic&base=0&plugin_achievements=1&plugin_achievements_display=detailed&plugin_habits=1&plugin_habits_from=200)
-
-![Isometric](https://metrics.lecoq.io/pdahd?template=terminal&base=0&plugin_isocalendar=1&plugin_isocalendar_duration=full-year)
-
-![Isometric](https://metrics.lecoq.io/pdahd?template=terminal&base=0&plugin_isocalendar=1&plugin_isocalendar_duration=full-year&v=3)
 
 
 
