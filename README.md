@@ -32,3 +32,9 @@ WebSnap 允许你在安卓设备上轻松截取完整的网页长图。
 1. 在 **Releases** 页面下载最新的 APK。
 2. 安装并输入网址。
 3. 点击“截图”即可保存长图。
+
+<div align="center">
+  <a href="https://github.com/pdahd/WebSnap/releases/latest">
+    <img src="https://img.shields.io/badge/立即下载-APK-blue?style=for-the-badge&logo=android&logoColor=white" />
+  </a>
+</div>
