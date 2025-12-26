@@ -45,6 +45,9 @@ WebSnap 允许你在安卓设备上轻松截取完整的网页长图。
 ![Last Commit](https://img.shields.io/github/last-commit/pdahd/WebSnap?style=flat-square)
 ![License](https://img.shields.io/github/license/pdahd/WebSnap?style=flat-square&color=orange)
 
+![Activity](https://img.shields.io/github/commit-activity/m/pdahd/WebSnap/gemini-3-flash)
+
+
 
 > [!TIP]
 > ### 🎬 官方演示预告片
