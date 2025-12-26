@@ -8,3 +8,5 @@ Android WebView Long Screenshot Tool.
 <!-- 这两个不需要分支参数，加了会打不开 -->
 ![Kotlin](https://img.shields.io/badge/Language-Kotlin-purple?style=flat-square&logo=kotlin)
 ![Hits](https://hits.seeyoufarm.com/v1/github/pdahd/WebSnap/badge.svg?style=flat-square&color=blue)
+![Hits](https://hits.seeyoufarm.com/v1/github/pdahd/WebSnap/badge.svg?style=flat-square&color=blue&cache=1)
+
