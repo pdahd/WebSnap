@@ -38,3 +38,6 @@ WebSnap 允许你在安卓设备上轻松截取完整的网页长图。
     <img src="https://img.shields.io/badge/立即下载-APK-blue?style=for-the-badge&logo=android&logoColor=white" />
   </a>
 </div>
+
+![Commits](https://img.shields.io/github/commits-since/pdahd/WebSnap/v1.0.0?style=flat-square)
+
