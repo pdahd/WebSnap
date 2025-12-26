@@ -4,8 +4,22 @@ on:
   push:
     # 将 feature-crop 加入监控名单
     branches: [ "main", "gemini-3-flash" ]
+    # ============================================
+    # 新增：忽略以下路径的修改，不触发自动构建
+    # ============================================
+    paths-ignore:
+      - 'README.md'      # 忽略自述文件
+      - 'Wiki/**'        # 忽略 Wiki 文件夹下的所有内容
+      - 'docs/**'        # 忽略可能存在的文档文件夹
+      - '.gitignore'     # 忽略 git 忽略文件
+  
   pull_request:
     branches: [ "main", "gemini-3-flash" ]
+    # 同样在 PR 时也忽略这些非代码改动
+    paths-ignore:
+      - 'README.md'
+      - 'Wiki/**'
+      - 'docs/**'
   
   # 允许手动触发构建
   workflow_dispatch:
