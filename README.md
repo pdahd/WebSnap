@@ -51,6 +51,7 @@ WebSnap 允许你在安卓设备上轻松截取完整的网页长图。
 
 ![Metrics](https://metrics.lecoq.io/pdahd?template=classic&base=header%2C%20activity%2C%20community%2C%20repositories%2C%20metadata)
 
+![Activity Graph](https://github-readme-activity-graph.vercel.app/graph?username=pdahd&theme=github&bg_color=ffffff)
 
 
 
