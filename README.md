@@ -7,6 +7,8 @@ Android WebView Long Screenshot Tool.
 
 ![Hits](https://hits.seeyoufarm.com/v1/github/pdahd/WebSnap/badge.svg?style=flat-square&color=blue)
 
+![Android CI](https://github.com/pdahd/WebSnap/actions/workflows/android.yml/badge.svg?branch=gemini-3-flash)
+
 
 
 
