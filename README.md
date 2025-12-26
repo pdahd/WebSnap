@@ -75,6 +75,7 @@ WebSnap 允许你在安卓设备上轻松截取完整的网页长图。
 
 ![Isometric](https://metrics.lecoq.io/pdahd?template=terminal&base=0&plugin_isocalendar=1&plugin_isocalendar_duration=full-year)
 
+![Isometric](https://metrics.lecoq.io/pdahd?template=terminal&base=0&plugin_isocalendar=1&plugin_isocalendar_duration=full-year&v=3)
 
 
 
