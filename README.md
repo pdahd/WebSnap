@@ -71,6 +71,7 @@ WebSnap 允许你在安卓设备上轻松截取完整的网页长图。
 <!-- 你的方案 C (仪表盘) -->
 ![Metrics](https://metrics.lecoq.io/pdahd?template=classic&base=header%2C%20activity)
 
+![Achievements](https://metrics.lecoq.io/pdahd?template=classic&base=0&plugin_achievements=1&plugin_achievements_display=detailed&plugin_habits=1&plugin_habits_from=200)
 
 
 
