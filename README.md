@@ -5,5 +5,8 @@ Android WebView Long Screenshot Tool.
 
 ![Views](https://komarev.com/ghpvc/?user=pdahd&repo=WebSnap&color=blue?branch=gemini-3-flash)
 
+![Hits](https://hits.seeyoufarm.com/v1/github/pdahd/WebSnap/badge.svg?style=flat-square&color=blue)
+
+
 
 
