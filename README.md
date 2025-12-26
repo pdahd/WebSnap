@@ -39,6 +39,9 @@ WebSnap 允许你在安卓设备上轻松截取完整的网页长图。
   </a>
 </div>
 
+[![下载预告片](https://img.shields.io/badge/Apple_Trailer-⠿_1080p_⠿-333333?style=plastic&logo=apple&logoColor=white)](YOUR_VIDEO_URL)
+
+
 [![下载预告片](https://img.shields.io/badge/Apple_Trailer-🎞️_1080p_🎞️-007AFF?style=plastic&logo=apple&logoColor=white)](YOUR_VIDEO_URL)
 
 
