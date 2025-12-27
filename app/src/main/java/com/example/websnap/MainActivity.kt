@@ -124,12 +124,187 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         """.trimIndent()
 
     // ═══════════════════════════════════════════════════════════════
+    // Colab 自动重连（可选开关）
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Colab 自动点击“重新连接 / Reconnect”的脚本（仅在 Colab 域名 + 开关开启时注入）
+     *
+     * 设计目标：
+     * - 幂等：重复注入不会创建多个定时器（用 window.__websnapColabAutoReconnectInstalled guard）
+     * - 稳定：MutationObserver + setInterval 双保险
+     * - 安全：节流冷却，避免疯狂连点
+     * - 兼容：尽量遍历 shadowRoot（Colab 可能使用 Web Components）
+     */
+    private val colabAutoReconnectScript: String
+        get() = """
+            (function () {
+              try {
+                if (window.__websnapColabAutoReconnectInstalled) return;
+                window.__websnapColabAutoReconnectInstalled = true;
+
+                var COOLDOWN_MS = 10000;
+                var lastClickTime = 0;
+
+                function now() { return Date.now ? Date.now() : (new Date()).getTime(); }
+
+                function isVisible(el) {
+                  if (!el) return false;
+                  try {
+                    var rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+                    if (!rect) return true;
+                    if (rect.width <= 0 || rect.height <= 0) return false;
+                    var style = window.getComputedStyle ? window.getComputedStyle(el) : null;
+                    if (style) {
+                      if (style.display === 'none') return false;
+                      if (style.visibility === 'hidden') return false;
+                      if (style.opacity === '0') return false;
+                    }
+                    return true;
+                  } catch (e) {
+                    return true;
+                  }
+                }
+
+                function isClickable(el) {
+                  if (!el) return false;
+                  var tag = (el.tagName || '').toLowerCase();
+                  if (tag === 'button' || tag === 'a') return true;
+                  try {
+                    var role = el.getAttribute && el.getAttribute('role');
+                    if (role && role.toLowerCase() === 'button') return true;
+                  } catch (e) {}
+                  return typeof el.click === 'function';
+                }
+
+                function textMatches(el) {
+                  try {
+                    var text = (el.innerText || el.textContent || '').trim();
+                    if (!text) return false;
+                    var lower = text.toLowerCase();
+                    // 中文 / 英文固定文案匹配
+                    if (text.indexOf('重新连接') !== -1) return true;
+                    if (lower.indexOf('reconnect') !== -1) return true;
+                    return false;
+                  } catch (e) {
+                    return false;
+                  }
+                }
+
+                function tryClickInRoot(root) {
+                  if (!root) return false;
+                  var t = now();
+                  if (t - lastClickTime < COOLDOWN_MS) return false;
+
+                  try {
+                    var selector = "button,[role='button'],a,div,span";
+                    var nodes = root.querySelectorAll ? root.querySelectorAll(selector) : [];
+                    for (var i = 0; i < nodes.length; i++) {
+                      var el = nodes[i];
+                      if (!isClickable(el)) continue;
+                      if (!isVisible(el)) continue;
+                      if (!textMatches(el)) continue;
+
+                      lastClickTime = now();
+                      el.click();
+                      return true;
+                    }
+                  } catch (e) {}
+                  return false;
+                }
+
+                function walkShadowRootsAndClick(root) {
+                  // 先尝试当前 root
+                  if (tryClickInRoot(root)) return true;
+
+                  // 再遍历所有元素的 shadowRoot
+                  try {
+                    var walker = document.createTreeWalker(
+                      root,
+                      NodeFilter.SHOW_ELEMENT,
+                      null
+                    );
+                    var node = root;
+                    while (node) {
+                      if (node.shadowRoot) {
+                        if (walkShadowRootsAndClick(node.shadowRoot)) return true;
+                      }
+                      node = walker.nextNode();
+                    }
+                  } catch (e) {}
+
+                  return false;
+                }
+
+                function attempt() {
+                  try {
+                    return walkShadowRootsAndClick(document);
+                  } catch (e) {
+                    return false;
+                  }
+                }
+
+                // 监听 DOM 变化：弹窗出现时更快响应
+                try {
+                  var observer = new MutationObserver(function () {
+                    attempt();
+                  });
+                  observer.observe(document.documentElement, { childList: true, subtree: true });
+                } catch (e) {}
+
+                // 定时兜底：防 observer 漏掉
+                try {
+                  setInterval(attempt, 4000);
+                  setTimeout(attempt, 1200);
+                } catch (e) {}
+
+              } catch (e) {
+                // ignore
+              }
+            })();
+        """.trimIndent()
+
+    private fun getSettingsPrefs() =
+        getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
+
+    private fun isColabUrl(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        if (url.startsWith("file:", ignoreCase = true)) return false
+
+        return try {
+            val host = Uri.parse(url).host ?: return false
+            host.equals("colab.research.google.com", ignoreCase = true)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun isColabAutoReconnectEnabled(): Boolean {
+        return getSettingsPrefs().getBoolean(KEY_AUTO_RECONNECT_COLAB, false)
+    }
+
+    private fun shouldInjectColabAutoReconnect(url: String?): Boolean {
+        return isColabAutoReconnectEnabled() && isColabUrl(url)
+    }
+
+    private fun maybeInjectColabAutoReconnect(view: WebView?, url: String?) {
+        if (view == null) return
+        if (!shouldInjectColabAutoReconnect(url)) return
+
+        // evaluateJavascript 可重复调用：脚本内部有 guard，不会重复安装
+        view.evaluateJavascript(colabAutoReconnectScript, null)
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
     // 权限请求码
     // ═══════════════════════════════════════════════════════════════
 
     companion object {
         private const val PERMISSION_REQUEST_CAMERA = 1001
         private const val PERMISSION_REQUEST_MICROPHONE = 1002
+
+        private const val PREFS_SETTINGS = "websnap_settings"
+        private const val KEY_AUTO_RECONNECT_COLAB = "auto_reconnect_colab"
     }
 
     // ═══════════════════════════════════════════════════════════════
