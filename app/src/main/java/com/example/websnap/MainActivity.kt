@@ -618,6 +618,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
                 CookieManager.getInstance().flush()
 
+                // Colab 自动重连：仅在开关开启 + Colab 域名时注入
+                maybeInjectColabAutoReconnect(view, url)
+
                 if (isPcMode && view != null && url?.startsWith("file:") != true) {
                     handleDesktopModePageFinished(view)
                 }
