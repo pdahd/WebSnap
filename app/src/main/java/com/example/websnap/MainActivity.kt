@@ -16,15 +16,12 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
-import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.LayoutInflater
-import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.webkit.CookieManager
-import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -127,317 +124,88 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         """.trimIndent()
 
     // ═══════════════════════════════════════════════════════════════
-    // Colab 自动重连（可选开关）- 真实触摸方案 + Ping 验证
+    // Colab 自动重连（可选开关）- 纯 JS click（穿透 shadow DOM）
     // ═══════════════════════════════════════════════════════════════
 
     /**
-     * 重要说明：
-     * - 之前纯 JS element.click() 在 Colab 上无效（很可能是 isTrusted 限制）
-     * - 这版策略：JS 负责定位元素的屏幕位置 → 调用 Android Bridge → WebView 派发真实触摸事件
-     * - 增加 ping：用来验证“JS 能否调用到 Kotlin Bridge”（如果没 toast，说明 Bridge 没通）
+     * 说明：
+     * - Kiwi DevTools 已验证：通过 colab-connect-button → shadowRoot → colab-toolbar-button#connect → md-text-button#button click()
+     *   可以触发连接/重新连接（无需 Android 侧模拟触摸）
+     * - 核心判断依据：toolbar 的 tooltiptext
+     *   - 断线时：tooltiptext = “点击即可连接”
+     *   - 已连接时：tooltiptext 以“已连接 ...”开头，并包含 RAM/磁盘等信息
      */
     private val colabAutoReconnectScript: String
         get() = """
             (function () {
               try {
-                if (window.__websnapColabAutoReconnectInstalled) return;
-                window.__websnapColabAutoReconnectInstalled = true;
+                if (window.__ws_colab_auto_connect_installed) return;
+                window.__ws_colab_auto_connect_installed = true;
 
-                // ===== Ping：验证 JS -> Android Bridge 通路（只提示一次）=====
-                try {
-                  if (window.WebSnapColabBridge && window.WebSnapColabBridge.ping) {
-                    window.WebSnapColabBridge.ping();
-                  } else if (typeof WebSnapColabBridge !== 'undefined' && WebSnapColabBridge.ping) {
-                    WebSnapColabBridge.ping();
-                  }
-                } catch (e) {}
+                var lastClick = 0;
 
-                var COOLDOWN_MS = 8000;
-                var lastCall = 0;
+                function getParts() {
+                  var host = document.querySelector("colab-connect-button");
+                  var toolbar = (host && host.shadowRoot)
+                    ? host.shadowRoot.querySelector("colab-toolbar-button#connect")
+                    : null;
 
-                function now() { return Date.now ? Date.now() : (new Date()).getTime(); }
+                  var tooltip = (toolbar && toolbar.getAttribute)
+                    ? String(toolbar.getAttribute("tooltiptext") || "").trim()
+                    : "";
 
-                function safeAttr(el, name) {
-                  try {
-                    return (el && el.getAttribute) ? (el.getAttribute(name) || '') : '';
-                  } catch (e) {
-                    return '';
-                  }
+                  // 优先点组件层 md-text-button，不行再点内部原生 button
+                  var md = (toolbar && toolbar.shadowRoot)
+                    ? (toolbar.shadowRoot.querySelector("md-text-button#button") || null)
+                    : null;
+
+                  var nativeBtn = (md && md.shadowRoot)
+                    ? (md.shadowRoot.querySelector("button#button") || null)
+                    : null;
+
+                  return { host: host, toolbar: toolbar, md: md, nativeBtn: nativeBtn, tooltip: tooltip };
                 }
 
-                function getText(el) {
-                  try {
-                    var t = (el.innerText || el.textContent || '').trim();
-                    if (t) return t;
-                    var aria = String(safeAttr(el, 'aria-label') || '').trim();
-                    if (aria) return aria;
-                    var title = String(safeAttr(el, 'title') || '').trim();
-                    if (title) return title;
-                    return '';
-                  } catch (e) {
-                    return '';
-                  }
-                }
+                function shouldConnect(tooltip) {
+                  if (!tooltip) return false;
 
-                function isVisible(el) {
-                  if (!el || !el.getBoundingClientRect) return false;
-                  try {
-                    var r = el.getBoundingClientRect();
-                    return r.width > 0 && r.height > 0;
-                  } catch (e) {
-                    return false;
-                  }
-                }
+                  // 已连接/正在连接时不处理
+                  if (tooltip.indexOf("已连接") !== -1) return false;
+                  if (tooltip.indexOf("正在连接") !== -1) return false;
 
-                function isClickable(el) {
-                  if (!el) return false;
-                  var tag = (el.tagName || '').toLowerCase();
-                  if (tag === 'button' || tag === 'a') return true;
-                  var role = String(safeAttr(el, 'role') || '').toLowerCase();
-                  if (role === 'button') return true;
-                  return typeof el.click === 'function';
-                }
+                  // 断线态（你抓到的关键文案）
+                  if (/^点击即可/.test(tooltip) && /连接/.test(tooltip)) return true;
 
-                function matchReconnect(text) {
-                  if (!text) return false;
-                  var t = text.trim();
-                  var lower = t.toLowerCase();
-                  if (t.indexOf('重新连接') !== -1) return true;
-                  if (lower.indexOf('reconnect') !== -1) return true;
+                  // 英文兜底
+                  if (/click to/i.test(tooltip) && /connect/i.test(tooltip)) return true;
+
                   return false;
                 }
 
-                function matchConnect(text) {
-                  if (!text) return false;
-                  var t = text.trim();
-                  var lower = t.toLowerCase();
-                  // 右上角断线状态可能显示“连接”或“重新连接”
-                  if (t === '连接') return true;
-                  if (t.indexOf('重新连接') !== -1) return true;
-                  if (lower === 'connect') return true;
-                  if (lower.indexOf('reconnect') !== -1) return true;
-                  return false;
-                }
+                function tick() {
+                  var now = Date.now();
+                  if (now - lastClick < 6000) return; // 冷却，避免连点
 
-                function matchDisconnectedContext(text) {
-                  if (!text) return false;
-                  var t = text.trim();
-                  var lower = t.toLowerCase();
-                  if (t.indexOf('代码执行程序已断开连接') !== -1) return true;
-                  if (t.indexOf('断开连接') !== -1) return true;
-                  if (lower.indexOf('disconnected') !== -1) return true;
-                  return false;
-                }
+                  var parts = getParts();
+                  if (!shouldConnect(parts.tooltip)) return;
 
-                function viewportSize() {
+                  lastClick = now;
+
                   try {
-                    if (window.visualViewport) {
-                      return { w: window.visualViewport.width, h: window.visualViewport.height };
-                    }
+                    var target = parts.md || parts.nativeBtn;
+                    if (target && target.click) target.click();
                   } catch (e) {}
-                  var w = document.documentElement ? document.documentElement.clientWidth : window.innerWidth;
-                  var h = document.documentElement ? document.documentElement.clientHeight : window.innerHeight;
-                  return { w: w, h: h };
                 }
 
-                function callBridgeAt(el) {
-                  if (!el || !el.getBoundingClientRect) return false;
-
-                  var vp = viewportSize();
-                  if (!vp || !vp.w || !vp.h) return false;
-
-                  var r = el.getBoundingClientRect();
-                  var cx = r.left + r.width / 2;
-                  var cy = r.top + r.height / 2;
-
-                  var xr = cx / vp.w;
-                  var yr = cy / vp.h;
-
-                  try {
-                    if (window.WebSnapColabBridge && window.WebSnapColabBridge.tapAtRatio) {
-                      window.WebSnapColabBridge.tapAtRatio(xr, yr);
-                      return true;
-                    } else if (typeof WebSnapColabBridge !== 'undefined' && WebSnapColabBridge.tapAtRatio) {
-                      WebSnapColabBridge.tapAtRatio(xr, yr);
-                      return true;
-                    }
-                  } catch (e) {}
-
-                  return false;
-                }
-
-                function findReconnectInDialog() {
-                  var nodes = document.querySelectorAll("button,[role='button'],a,div,span");
-                  for (var i = 0; i < nodes.length; i++) {
-                    var el = nodes[i];
-                    if (!isVisible(el)) continue;
-                    if (!isClickable(el)) continue;
-
-                    var label = getText(el);
-                    if (!matchReconnect(label)) continue;
-
-                    // 上溯判断是否处于“断开连接”弹窗上下文
-                    var p = el;
-                    var ok = false;
-                    for (var k = 0; k < 10 && p; k++) {
-                      var ctx = getText(p);
-                      if (matchDisconnectedContext(ctx)) { ok = true; break; }
-
-                      var role = String(safeAttr(p, 'role') || '').toLowerCase();
-                      var ariaModal = String(safeAttr(p, 'aria-modal') || '').toLowerCase();
-                      if (role === 'dialog' || ariaModal === 'true') { ok = true; break; }
-
-                      p = p.parentElement;
-                    }
-
-                    if (ok) return el;
-                  }
-                  return null;
-                }
-
-                function findTopRightConnect() {
-                  var vp = viewportSize();
-                  if (!vp || !vp.w || !vp.h) return null;
-
-                  var nodes = document.querySelectorAll("button,[role='button'],a,div,span");
-                  var best = null;
-                  var bestScore = -1;
-
-                  for (var i = 0; i < nodes.length; i++) {
-                    var el = nodes[i];
-                    if (!isVisible(el)) continue;
-                    if (!isClickable(el)) continue;
-
-                    var label = getText(el);
-                    if (!matchConnect(label)) continue;
-
-                    var r = el.getBoundingClientRect();
-                    // 几何约束：靠右、靠上（避免正文里出现“连接”字样误点）
-                    if (r.right < vp.w * 0.60) continue;
-                    if (r.top > vp.h * 0.30) continue;
-
-                    var score = (r.right / vp.w) + (1 - (r.top / vp.h));
-                    if (score > bestScore) {
-                      bestScore = score;
-                      best = el;
-                    }
-                  }
-
-                  return best;
-                }
-
-                function attempt() {
-                  var t = now();
-                  if (t - lastCall < COOLDOWN_MS) return;
-                  lastCall = t;
-
-                  // 优先处理弹窗重连
-                  var reconnectBtn = findReconnectInDialog();
-                  if (reconnectBtn) {
-                    try { if (reconnectBtn.scrollIntoView) reconnectBtn.scrollIntoView({block:'center', inline:'center'}); } catch (e) {}
-                    callBridgeAt(reconnectBtn);
-                    return;
-                  }
-
-                  // 无弹窗时，处理右上角“连接/重新连接”
-                  var connectBtn = findTopRightConnect();
-                  if (connectBtn) {
-                    try { if (connectBtn.scrollIntoView) connectBtn.scrollIntoView({block:'center', inline:'center'}); } catch (e) {}
-                    callBridgeAt(connectBtn);
-                    return;
-                  }
-                }
-
-                try {
-                  var observer = new MutationObserver(function () { attempt(); });
-                  observer.observe(document.documentElement, { childList: true, subtree: true });
-                } catch (e) {}
-
-                try {
-                  setInterval(attempt, 2500);
-                  setTimeout(attempt, 800);
-                  setTimeout(attempt, 3500);
-                } catch (e) {}
+                setInterval(tick, 2000);
+                setTimeout(tick, 800);
+                tick();
 
               } catch (e) {
                 // ignore
               }
             })();
         """.trimIndent()
-
-    @Volatile
-    private var lastAutoTapUptimeMs: Long = 0L
-
-    /**
-     * 关键修复点：
-     * - 不能是 private class / private inner class
-     * - 否则 WebView 反射绑定 @JavascriptInterface 方法可能失败，导致 JS 调用完全无效
-     */
-    inner class ColabAutoReconnectBridge {
-
-        @JavascriptInterface
-        fun ping() {
-            runOnUiThread {
-                // 安全：只在开关开启 + Colab 域名时提示
-                if (!shouldInjectColabAutoReconnect(binding.webView.url)) return@runOnUiThread
-                showToast("Colab Bridge OK")
-            }
-        }
-
-        @JavascriptInterface
-        fun tapAtRatio(xRatio: Double, yRatio: Double) {
-            runOnUiThread {
-                // 双重保护：只有开关开启 + colab 域名时才允许触发真实触摸
-                if (!shouldInjectColabAutoReconnect(binding.webView.url)) return@runOnUiThread
-
-                val now = SystemClock.uptimeMillis()
-                if (now - lastAutoTapUptimeMs < 7000L) return@runOnUiThread
-                lastAutoTapUptimeMs = now
-
-                val w = binding.webView.width
-                val h = binding.webView.height
-                if (w <= 0 || h <= 0) return@runOnUiThread
-
-                val xr = xRatio.toFloat().coerceIn(0.05f, 0.95f)
-                val yr = yRatio.toFloat().coerceIn(0.05f, 0.95f)
-
-                val x = xr * w
-                val y = yr * h
-
-                performTapOnWebView(x, y)
-            }
-        }
-    }
-
-    private fun performTapOnWebView(x: Float, y: Float) {
-        val webView = binding.webView
-
-        val downTime = SystemClock.uptimeMillis()
-        val downEvent = MotionEvent.obtain(
-            downTime,
-            downTime,
-            MotionEvent.ACTION_DOWN,
-            x,
-            y,
-            0
-        )
-        webView.dispatchTouchEvent(downEvent)
-        downEvent.recycle()
-
-        webView.postDelayed({
-            val upTime = SystemClock.uptimeMillis()
-            val upEvent = MotionEvent.obtain(
-                downTime,
-                upTime,
-                MotionEvent.ACTION_UP,
-                x,
-                y,
-                0
-            )
-            webView.dispatchTouchEvent(upEvent)
-            upEvent.recycle()
-        }, 60)
-    }
 
     private fun getSettingsPrefs() =
         getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
@@ -466,7 +234,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private fun maybeInjectColabAutoReconnect(view: WebView?, url: String?) {
         if (view == null) return
         if (!shouldInjectColabAutoReconnect(url)) return
-
         view.evaluateJavascript(colabAutoReconnectScript, null)
     }
 
@@ -571,7 +338,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         loadHomePage()
     }
 
-    // ===== MainActivity.kt part1 结束；请将 part2 粘贴到下一行继续（不要另起文件）=====
+    // ===== MainActivity.kt part1 结束；请将 part2 粘贴到下一行继续 =====
     override fun onStart() {
         super.onStart()
         Intent(this, RefreshService::class.java).also { intent ->
@@ -643,16 +410,11 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     // 文件上传处理
     // ═══════════════════════════════════════════════════════════════
 
-    /**
-     * 处理文件选择结果
-     */
     private fun handleFileChooserResult(resultCode: Int, data: Intent?) {
         val callback = fileUploadCallback
         fileUploadCallback = null
 
-        if (callback == null) {
-            return
-        }
+        if (callback == null) return
 
         if (resultCode != Activity.RESULT_OK) {
             callback.onReceiveValue(null)
@@ -660,14 +422,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         }
 
         val results: Array<Uri>? = when {
-            data?.data != null -> {
-                arrayOf(data.data!!)
-            }
+            data?.data != null -> arrayOf(data.data!!)
             data?.clipData != null -> {
                 val clipData = data.clipData!!
-                Array(clipData.itemCount) { i ->
-                    clipData.getItemAt(i).uri
-                }
+                Array(clipData.itemCount) { i -> clipData.getItemAt(i).uri }
             }
             else -> null
         }
@@ -675,37 +433,24 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         callback.onReceiveValue(results)
     }
 
-    /**
-     * 启动系统文件选择器
-     * 使用 ACTION_OPEN_DOCUMENT 打开完整的存储访问框架(SAF)界面
-     * 这样可以访问：内部存储、SD卡、下载文件夹、文档等所有位置
-     */
     private fun launchSystemFilePicker(params: WebChromeClient.FileChooserParams?) {
         try {
             val allowMultiple = params?.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE
 
-            // 使用 ACTION_OPEN_DOCUMENT 获得完整的存储访问框架(SAF)
-            // 这会显示：内部存储、SD卡、下载、文档等所有入口
             val documentIntent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
-                // 使用 */* 显示所有文件类型，让网页端验证
                 type = "*/*"
-                // 允许多选
                 putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple)
-                // 授予读取权限
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
 
-            // 同时创建 ACTION_GET_CONTENT 作为备选
             val contentIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
                 type = "*/*"
                 putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple)
             }
 
-            // 使用 chooser 组合两种 Intent，让用户看到最完整的选项
             val chooserIntent = Intent.createChooser(contentIntent, null).apply {
-                // 将 ACTION_OPEN_DOCUMENT 作为额外选项添加
                 putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(documentIntent))
             }
 
@@ -747,9 +492,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             mobileUserAgent = settings.userAgentString
             webViewClient = createWebViewClient()
             webChromeClient = createWebChromeClient()
-
-            // Colab 自动重连：注册 JS Bridge（JS 会回调触发真实触摸点击）
-            addJavascriptInterface(ColabAutoReconnectBridge(), "WebSnapColabBridge")
         }
 
         val cookieManager = CookieManager.getInstance()
@@ -821,30 +563,23 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 }
             }
 
-            override fun shouldOverrideUrlLoading(
-                view: WebView?,
-                request: WebResourceRequest?
-            ): Boolean {
-                val url = request?.url ?: return false
-                val scheme = url.scheme?.lowercase() ?: return false
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                val uri = request?.url ?: return false
+                val scheme = uri.scheme?.lowercase() ?: return false
 
                 desktopModeAppliedForCurrentPage = false
 
                 return when {
                     scheme in webViewSchemes -> false
                     scheme in systemSchemes -> {
-                        handleSystemScheme(url)
+                        handleSystemScheme(uri)
                         true
                     }
                     else -> true
                 }
             }
 
-            override fun doUpdateVisitedHistory(
-                view: WebView?,
-                url: String?,
-                isReload: Boolean
-            ) {
+            override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
                 super.doUpdateVisitedHistory(view, url, isReload)
                 updateNavigationButtons()
                 updateBookmarkButton()
@@ -891,7 +626,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 fileUploadCallback = filePathCallback
 
                 launchSystemFilePicker(fileChooserParams)
-
                 return true
             }
 
@@ -905,14 +639,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                     for (resource in requestedResources) {
                         when (resource) {
                             PermissionRequest.RESOURCE_VIDEO_CAPTURE -> {
-                                if (!hasCameraPermission()) {
-                                    permissionsToRequest.add(Manifest.permission.CAMERA)
-                                }
+                                if (!hasCameraPermission()) permissionsToRequest.add(Manifest.permission.CAMERA)
                             }
                             PermissionRequest.RESOURCE_AUDIO_CAPTURE -> {
-                                if (!hasMicrophonePermission()) {
-                                    permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
-                                }
+                                if (!hasMicrophonePermission()) permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
                             }
                         }
                     }
@@ -942,15 +672,13 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     // ═══════════════════════════════════════════════════════════════
 
     private fun hasCameraPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            this, Manifest.permission.CAMERA
-        ) == PackageManager.PERMISSION_GRANTED
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED
     }
 
     private fun hasMicrophonePermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            this, Manifest.permission.RECORD_AUDIO
-        ) == PackageManager.PERMISSION_GRANTED
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
     }
 
     override fun onRequestPermissionsResult(
@@ -968,27 +696,19 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                     for (resource in request.resources) {
                         when (resource) {
                             PermissionRequest.RESOURCE_VIDEO_CAPTURE -> {
-                                if (hasCameraPermission()) {
-                                    grantedResources.add(resource)
-                                } else {
-                                    showToast(getString(R.string.toast_permission_camera_denied))
-                                }
+                                if (hasCameraPermission()) grantedResources.add(resource)
+                                else showToast(getString(R.string.toast_permission_camera_denied))
                             }
                             PermissionRequest.RESOURCE_AUDIO_CAPTURE -> {
-                                if (hasMicrophonePermission()) {
-                                    grantedResources.add(resource)
-                                } else {
-                                    showToast(getString(R.string.toast_permission_mic_denied))
-                                }
+                                if (hasMicrophonePermission()) grantedResources.add(resource)
+                                else showToast(getString(R.string.toast_permission_mic_denied))
                             }
                         }
                     }
 
-                    if (grantedResources.isNotEmpty()) {
-                        request.grant(grantedResources.toTypedArray())
-                    } else {
-                        request.deny()
-                    }
+                    if (grantedResources.isNotEmpty()) request.grant(grantedResources.toTypedArray())
+                    else request.deny()
+
                     pendingPermissionRequest = null
                 }
             }
@@ -996,17 +716,15 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // 事件监听
+    // 事件监听 & 导航
     // ═══════════════════════════════════════════════════════════════
 
     private fun setupListeners() {
-        binding.buttonGo.setOnClickListener {
-            loadUrl()
-        }
+        binding.buttonGo.setOnClickListener { loadUrl() }
 
         binding.editTextUrl.setOnEditorActionListener { _, actionId, event ->
-            val isEnterKey = event?.keyCode == KeyEvent.KEYCODE_ENTER
-                    && event.action == KeyEvent.ACTION_DOWN
+            val isEnterKey = event?.keyCode == KeyEvent.KEYCODE_ENTER &&
+                event.action == KeyEvent.ACTION_DOWN
             val isGoAction = actionId == EditorInfo.IME_ACTION_GO
 
             if (isEnterKey || isGoAction) {
@@ -1017,66 +735,38 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             }
         }
 
-        binding.buttonBookmark.setOnClickListener {
-            toggleBookmark()
-        }
-
+        binding.buttonBookmark.setOnClickListener { toggleBookmark() }
         binding.buttonBookmark.setOnLongClickListener {
-            showBookmarkSheet()
-            true
+            showBookmarkSheet(); true
         }
 
-        binding.buttonPcMode.setOnClickListener {
-            togglePcMode()
-        }
+        binding.buttonPcMode.setOnClickListener { togglePcMode() }
 
         binding.buttonBack.setOnClickListener {
-            if (binding.webView.canGoBack()) {
-                binding.webView.goBack()
-            }
+            if (binding.webView.canGoBack()) binding.webView.goBack()
         }
 
         binding.buttonForward.setOnClickListener {
-            if (binding.webView.canGoForward()) {
-                binding.webView.goForward()
-            }
+            if (binding.webView.canGoForward()) binding.webView.goForward()
         }
 
-        binding.buttonHome.setOnClickListener {
-            loadHomePage()
-        }
+        binding.buttonHome.setOnClickListener { loadHomePage() }
 
-        binding.buttonRefresh.setOnClickListener {
-            performRefresh()
-        }
-
+        binding.buttonRefresh.setOnClickListener { performRefresh() }
         binding.buttonRefresh.setOnLongClickListener {
-            showRefreshSheet()
-            true
+            showRefreshSheet(); true
         }
 
-        binding.buttonCapture.setOnClickListener {
-            captureVisibleArea()
-        }
-
+        binding.buttonCapture.setOnClickListener { captureVisibleArea() }
         binding.buttonCapture.setOnLongClickListener {
-            captureWholePage()
-            true
+            captureWholePage(); true
         }
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    // 主页功能
-    // ═══════════════════════════════════════════════════════════════
 
     private fun loadHomePage() {
         binding.editTextUrl.setText("")
         binding.webView.loadUrl(homePageUrl)
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    // 导航功能
-    // ═══════════════════════════════════════════════════════════════
 
     private fun updateNavigationButtons() {
         binding.buttonBack.isEnabled = binding.webView.canGoBack()
@@ -1094,6 +784,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         }
     }
 
+    // ===== MainActivity.kt part2 结束；请将 part3 粘贴到下一行继续 =====
     // ═══════════════════════════════════════════════════════════════
     // 书签功能
     // ═══════════════════════════════════════════════════════════════
@@ -1101,9 +792,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private fun updateBookmarkButton() {
         val currentUrl = binding.webView.url
 
-        val isBookmarked = if (!currentUrl.isNullOrBlank()
-            && currentUrl != "about:blank"
-            && !currentUrl.startsWith("file:")
+        val isBookmarked = if (!currentUrl.isNullOrBlank() &&
+            currentUrl != "about:blank" &&
+            !currentUrl.startsWith("file:")
         ) {
             bookmarkManager.contains(currentUrl)
         } else {
@@ -1120,9 +811,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private fun toggleBookmark() {
         val currentUrl = binding.webView.url
 
-        if (currentUrl.isNullOrBlank()
-            || currentUrl == "about:blank"
-            || currentUrl.startsWith("file:")
+        if (currentUrl.isNullOrBlank() ||
+            currentUrl == "about:blank" ||
+            currentUrl.startsWith("file:")
         ) {
             showToast(getString(R.string.toast_bookmark_need_page))
             return
@@ -1133,8 +824,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             showToast(getString(R.string.toast_bookmark_removed))
         } else {
             val title = currentPageTitle.ifBlank { currentUrl }
-            val bookmark = Bookmark(title = title, url = currentUrl)
-            bookmarkManager.add(bookmark)
+            bookmarkManager.add(Bookmark(title = title, url = currentUrl))
             showToast(getString(R.string.toast_bookmark_added))
         }
 
@@ -1212,27 +902,24 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         }
 
         val currentUrl = binding.webView.url
-        if (!currentUrl.isNullOrBlank()
-            && currentUrl != "about:blank"
-            && !currentUrl.startsWith("file:")
+        if (!currentUrl.isNullOrBlank() &&
+            currentUrl != "about:blank" &&
+            !currentUrl.startsWith("file:")
         ) {
             binding.webView.reload()
         }
     }
 
-    // ===== MainActivity.kt part2 结束；请将 part3 粘贴到下一行继续（不要另起文件）=====
     // ═══════════════════════════════════════════════════════════════
     // 刷新功能
     // ═══════════════════════════════════════════════════════════════
 
     private fun performRefresh() {
         val currentUrl = binding.webView.url
-
         if (currentUrl.isNullOrBlank() || currentUrl == "about:blank") {
             showToast(getString(R.string.toast_refresh_need_page))
             return
         }
-
         binding.webView.reload()
     }
 
@@ -1252,7 +939,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         formatSeconds(remaining)
                     )
                 }
-
                 is RefreshTask.Scheduled -> {
                     val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
                     binding.buttonRefresh.text = getString(
@@ -1260,7 +946,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         timeFormat.format(Date(task.targetTimeMillis))
                     )
                 }
-
                 null -> {
                     binding.buttonRefresh.isActivated = false
                     binding.buttonRefresh.text = getString(R.string.button_refresh_default)
@@ -1287,7 +972,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 .putBoolean(KEY_AUTO_RECONNECT_COLAB, isChecked)
                 .apply()
 
-            // 用户开启时，如果当前正好在 Colab 页面，立即注入一次
             if (isChecked) {
                 maybeInjectColabAutoReconnect(binding.webView, binding.webView.url)
             }
@@ -1358,7 +1042,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         formatSeconds(remaining)
                     )
                 }
-
                 is RefreshTask.Scheduled -> {
                     val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
                     sheetBinding.textViewCurrentTask.text = getString(
@@ -1366,7 +1049,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         timeFormat.format(Date(task.targetTimeMillis))
                     )
                 }
-
                 null -> {
                     sheetBinding.containerCurrentTask.visibility = View.GONE
                     sheetBinding.buttonCancelTask.visibility = View.GONE
@@ -1411,9 +1093,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                     }
                 }
 
-                else -> {
-                    showToast(getString(R.string.toast_refresh_select_mode))
-                }
+                else -> showToast(getString(R.string.toast_refresh_select_mode))
             }
         }
 
@@ -1442,9 +1122,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
 
-        buttonCancel.setOnClickListener {
-            dialog.dismiss()
-        }
+        buttonCancel.setOnClickListener { dialog.dismiss() }
 
         buttonOk.setOnClickListener {
             val hours = editHours.text.toString().toIntOrNull() ?: 0
@@ -1452,7 +1130,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             val seconds = editSeconds.text.toString().toIntOrNull() ?: 0
 
             val totalSeconds = (hours * 3600L) + (minutes * 60L) + seconds
-
             if (totalSeconds <= 0) {
                 showToast(getString(R.string.toast_invalid_interval))
                 return@setOnClickListener
@@ -1482,11 +1159,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         ).show()
     }
 
-    private fun showSecondPicker(
-        sheetBinding: BottomSheetRefreshBinding,
-        hour: Int,
-        minute: Int
-    ) {
+    private fun showSecondPicker(sheetBinding: BottomSheetRefreshBinding, hour: Int, minute: Int) {
         val seconds = arrayOf("00", "15", "30", "45")
         val secondValues = intArrayOf(0, 15, 30, 45)
 
@@ -1504,12 +1177,11 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
                 selectedScheduledTime = calendar
 
-                val timeStr = String.format(
+                sheetBinding.buttonPickTime.text = String.format(
                     Locale.getDefault(),
                     "%02d:%02d:%02d",
                     hour, minute, second
                 )
-                sheetBinding.buttonPickTime.text = timeStr
             }
             .show()
     }
@@ -1521,11 +1193,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             putExtra(RefreshService.EXTRA_INTERVAL_SECONDS, intervalSeconds)
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
+        else startService(intent)
     }
 
     private fun startScheduledRefresh(targetTimeMillis: Long) {
@@ -1535,11 +1204,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             putExtra(RefreshService.EXTRA_TARGET_TIME, targetTimeMillis)
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
+        else startService(intent)
     }
 
     private fun stopRefreshService() {
@@ -1583,27 +1249,19 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     // ═══════════════════════════════════════════════════════════════
 
     override fun onTaskStarted(task: RefreshTask) {
-        runOnUiThread {
-            updateRefreshButtonState()
-        }
+        runOnUiThread { updateRefreshButtonState() }
     }
 
     override fun onCountdownTick(remainingSeconds: Long) {
         runOnUiThread {
-            val task = refreshService?.getCurrentTask()
-            when (task) {
+            when (refreshService?.getCurrentTask()) {
                 is RefreshTask.Interval -> {
                     binding.buttonRefresh.text = getString(
                         R.string.button_refresh_countdown,
                         formatSeconds(remainingSeconds)
                     )
                 }
-
-                is RefreshTask.Scheduled -> {
-                    // 定时模式按钮显示目标时间，不需要每秒变
-                }
-
-                null -> {}
+                else -> {}
             }
         }
     }
@@ -1649,11 +1307,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     // 截图功能
     // ═══════════════════════════════════════════════════════════════
 
-    /**
-     * 计算截图所需的缩放比例
-     * 在 PC 模式下，webView.scale 可能被 viewport 的 initial-scale 污染
-     * 需要使用实际的宽度比例来计算
-     */
     private fun getEffectiveScale(): Float {
         return if (isPcMode) {
             binding.webView.width.toFloat() / desktopViewportWidth.toFloat()
@@ -1674,7 +1327,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         binding.webView.post {
             try {
                 val bitmap = captureVisibleBitmap()
-
                 if (bitmap != null) {
                     CropBitmapHolder.set(bitmap, isFullPage = false)
                     showToast(getString(R.string.toast_capture_visible))
@@ -1682,7 +1334,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 } else {
                     showToast(getString(R.string.toast_capture_failed))
                 }
-
             } catch (e: OutOfMemoryError) {
                 showToast(getString(R.string.toast_memory_insufficient))
                 System.gc()
@@ -1706,7 +1357,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         binding.webView.post {
             try {
                 val bitmap = captureFullPageBitmap()
-
                 if (bitmap != null) {
                     CropBitmapHolder.set(bitmap, isFullPage = true)
                     showToast(getString(R.string.toast_capture_fullpage))
@@ -1714,7 +1364,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 } else {
                     showToast(getString(R.string.toast_capture_failed))
                 }
-
             } catch (e: OutOfMemoryError) {
                 showToast(getString(R.string.toast_memory_insufficient))
                 System.gc()
@@ -1729,19 +1378,15 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
     private fun captureVisibleBitmap(): Bitmap? {
         val webView = binding.webView
-
         val width = webView.width
         val height = webView.height
 
-        if (width <= 0 || height <= 0) {
-            return null
+        if (width <= 0 || height <= 0) return null
+
+        return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bmp ->
+            val canvas = Canvas(bmp)
+            webView.draw(canvas)
         }
-
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        webView.draw(canvas)
-
-        return bitmap
     }
 
     private fun captureFullPageBitmap(): Bitmap? {
@@ -1751,9 +1396,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         val contentWidth = webView.width
         var contentHeight = (webView.contentHeight * scale).toInt()
 
-        if (contentWidth <= 0 || contentHeight <= 0) {
-            return null
-        }
+        if (contentWidth <= 0 || contentHeight <= 0) return null
 
         var wasTruncated = false
         if (contentHeight > maxCaptureHeight) {
@@ -1775,15 +1418,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
         val bitmap: Bitmap?
         try {
-            bitmap = Bitmap.createBitmap(
-                contentWidth,
-                contentHeight,
-                Bitmap.Config.ARGB_8888
-            )
-
+            bitmap = Bitmap.createBitmap(contentWidth, contentHeight, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
             webView.draw(canvas)
-
         } finally {
             webView.setLayerType(originalLayerType, null)
         }
