@@ -87,6 +87,10 @@
     <string name="refresh_button_cancel">取消任务</string>
     <string name="refresh_button_confirm">确认设置</string>
 
+    <!-- Colab 自动重连 -->
+    <string name="refresh_colab_auto_reconnect">Colab 自动重连</string>
+    <string name="refresh_colab_auto_reconnect_hint">检测到“重新连接 / Reconnect”弹窗时自动点击</string>
+
     <!-- 间隔选项 -->
     <string name="interval_10_sec">10 秒</string>
     <string name="interval_30_sec">30 秒</string>
