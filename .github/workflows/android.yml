@@ -3,9 +3,9 @@ name: Android CI
 on:
   push:
     # 将 feature-crop 加入监控名单
-    branches: [ "main", "feature-claude" ]
+    branches: [ "main", "chatGPT" ]
   pull_request:
-    branches: [ "main", "feature-claude" ]
+    branches: [ "main", "chatGPT" ]
   
   # 允许手动触发构建
   workflow_dispatch:
