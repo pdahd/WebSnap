@@ -1091,6 +1091,21 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         val bottomSheet = BottomSheetDialog(this, R.style.Theme_WebSnap_BottomSheet)
         val sheetBinding = BottomSheetRefreshBinding.inflate(layoutInflater)
         bottomSheet.setContentView(sheetBinding.root)
+        // ─────────────────────────────────────────────
+        // Colab 自动重连开关（默认关闭）
+        // ─────────────────────────────────────────────
+        sheetBinding.switchColabAutoReconnect.isChecked = isColabAutoReconnectEnabled()
+        sheetBinding.switchColabAutoReconnect.setOnCheckedChangeListener { _, isChecked ->
+            getSettingsPrefs()
+                .edit()
+                .putBoolean(KEY_AUTO_RECONNECT_COLAB, isChecked)
+                .apply()
+
+            // 用户开启时，如果当前正好在 Colab 页面，立即注入一次
+            if (isChecked) {
+                maybeInjectColabAutoReconnect(binding.webView, binding.webView.url)
+            }
+        }
 
         val intervalOptions = resources.getStringArray(R.array.interval_options)
         val intervalValues = resources.getIntArray(R.array.interval_values)
