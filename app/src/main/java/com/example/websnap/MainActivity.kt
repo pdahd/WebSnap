@@ -127,17 +127,14 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         """.trimIndent()
 
     // ═══════════════════════════════════════════════════════════════
-    // Colab 自动重连（可选开关）- 真实触摸方案
+    // Colab 自动重连（可选开关）- 真实触摸方案 + Ping 验证
     // ═══════════════════════════════════════════════════════════════
 
     /**
-     * 说明：
+     * 重要说明：
      * - 之前纯 JS element.click() 在 Colab 上无效（很可能是 isTrusted 限制）
-     * - 这版策略：JS 负责定位“重新连接/连接”元素的屏幕位置 → 调用 Android Bridge → WebView 派发真实触摸事件
-     *
-     * 覆盖两种断线表现：
-     * 1) 弹窗里“重新连接”
-     * 2) 右上角“连接/重新连接”（无弹窗）
+     * - 这版策略：JS 负责定位元素的屏幕位置 → 调用 Android Bridge → WebView 派发真实触摸事件
+     * - 增加 ping：用来验证“JS 能否调用到 Kotlin Bridge”（如果没 toast，说明 Bridge 没通）
      */
     private val colabAutoReconnectScript: String
         get() = """
@@ -145,6 +142,15 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
               try {
                 if (window.__websnapColabAutoReconnectInstalled) return;
                 window.__websnapColabAutoReconnectInstalled = true;
+
+                // ===== Ping：验证 JS -> Android Bridge 通路（只提示一次）=====
+                try {
+                  if (window.WebSnapColabBridge && window.WebSnapColabBridge.ping) {
+                    window.WebSnapColabBridge.ping();
+                  } else if (typeof WebSnapColabBridge !== 'undefined' && WebSnapColabBridge.ping) {
+                    WebSnapColabBridge.ping();
+                  }
+                } catch (e) {}
 
                 var COOLDOWN_MS = 8000;
                 var lastCall = 0;
@@ -244,13 +250,15 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                   var cx = r.left + r.width / 2;
                   var cy = r.top + r.height / 2;
 
-                  // 转为视口比例，交给 Android 侧映射到 WebView 像素坐标
                   var xr = cx / vp.w;
                   var yr = cy / vp.h;
 
                   try {
                     if (window.WebSnapColabBridge && window.WebSnapColabBridge.tapAtRatio) {
                       window.WebSnapColabBridge.tapAtRatio(xr, yr);
+                      return true;
+                    } else if (typeof WebSnapColabBridge !== 'undefined' && WebSnapColabBridge.tapAtRatio) {
+                      WebSnapColabBridge.tapAtRatio(xr, yr);
                       return true;
                     }
                   } catch (e) {}
@@ -259,7 +267,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 }
 
                 function findReconnectInDialog() {
-                  // 找弹窗里的“重新连接”
                   var nodes = document.querySelectorAll("button,[role='button'],a,div,span");
                   for (var i = 0; i < nodes.length; i++) {
                     var el = nodes[i];
@@ -289,7 +296,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 }
 
                 function findTopRightConnect() {
-                  // 找右上角“连接/重新连接”
                   var vp = viewportSize();
                   if (!vp || !vp.w || !vp.h) return null;
 
@@ -310,7 +316,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                     if (r.right < vp.w * 0.60) continue;
                     if (r.top > vp.h * 0.30) continue;
 
-                    // 评分：越靠右上越优先
                     var score = (r.right / vp.w) + (1 - (r.top / vp.h));
                     if (score > bestScore) {
                       bestScore = score;
@@ -343,13 +348,11 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                   }
                 }
 
-                // DOM 变化时尝试一次
                 try {
                   var observer = new MutationObserver(function () { attempt(); });
                   observer.observe(document.documentElement, { childList: true, subtree: true });
                 } catch (e) {}
 
-                // 定时兜底
                 try {
                   setInterval(attempt, 2500);
                   setTimeout(attempt, 800);
@@ -365,7 +368,21 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     @Volatile
     private var lastAutoTapUptimeMs: Long = 0L
 
-    private inner class ColabAutoReconnectBridge {
+    /**
+     * 关键修复点：
+     * - 不能是 private class / private inner class
+     * - 否则 WebView 反射绑定 @JavascriptInterface 方法可能失败，导致 JS 调用完全无效
+     */
+    inner class ColabAutoReconnectBridge {
+
+        @JavascriptInterface
+        fun ping() {
+            runOnUiThread {
+                // 安全：只在开关开启 + Colab 域名时提示
+                if (!shouldInjectColabAutoReconnect(binding.webView.url)) return@runOnUiThread
+                showToast("Colab Bridge OK")
+            }
+        }
 
         @JavascriptInterface
         fun tapAtRatio(xRatio: Double, yRatio: Double) {
@@ -450,7 +467,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         if (view == null) return
         if (!shouldInjectColabAutoReconnect(url)) return
 
-        // evaluateJavascript 可重复调用：脚本内部有 guard，不会重复安装
         view.evaluateJavascript(colabAutoReconnectScript, null)
     }
 
@@ -555,6 +571,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         loadHomePage()
     }
 
+    // ===== MainActivity.kt part1 结束；请将 part2 粘贴到下一行继续（不要另起文件）=====
     override fun onStart() {
         super.onStart()
         Intent(this, RefreshService::class.java).also { intent ->
@@ -788,8 +805,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 }
             }
 
-            // ===== MainActivity.kt part1 结束；请将 part2 粘贴到下一行继续（不要另起文件）=====
-                        override fun onReceivedError(
+            override fun onReceivedError(
                 view: WebView?,
                 request: WebResourceRequest?,
                 error: WebResourceError?
@@ -1236,6 +1252,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         formatSeconds(remaining)
                     )
                 }
+
                 is RefreshTask.Scheduled -> {
                     val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
                     binding.buttonRefresh.text = getString(
@@ -1243,6 +1260,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         timeFormat.format(Date(task.targetTimeMillis))
                     )
                 }
+
                 null -> {
                     binding.buttonRefresh.isActivated = false
                     binding.buttonRefresh.text = getString(R.string.button_refresh_default)
@@ -1340,6 +1358,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         formatSeconds(remaining)
                     )
                 }
+
                 is RefreshTask.Scheduled -> {
                     val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
                     sheetBinding.textViewCurrentTask.text = getString(
@@ -1347,6 +1366,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         timeFormat.format(Date(task.targetTimeMillis))
                     )
                 }
+
                 null -> {
                     sheetBinding.containerCurrentTask.visibility = View.GONE
                     sheetBinding.buttonCancelTask.visibility = View.GONE
@@ -1379,6 +1399,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                     showToast(getString(R.string.toast_refresh_started))
                     bottomSheet.dismiss()
                 }
+
                 sheetBinding.radioScheduled.isChecked -> {
                     val time = selectedScheduledTime
                     if (time == null) {
@@ -1389,6 +1410,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         bottomSheet.dismiss()
                     }
                 }
+
                 else -> {
                     showToast(getString(R.string.toast_refresh_select_mode))
                 }
@@ -1576,9 +1598,11 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         formatSeconds(remainingSeconds)
                     )
                 }
+
                 is RefreshTask.Scheduled -> {
                     // 定时模式按钮显示目标时间，不需要每秒变
                 }
+
                 null -> {}
             }
         }
