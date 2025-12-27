@@ -137,133 +137,222 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
      * - 兼容：尽量遍历 shadowRoot（Colab 可能使用 Web Components）
      */
     private val colabAutoReconnectScript: String
-        get() = """
-            (function () {
+    get() = """
+        (function () {
+          try {
+            if (window.__websnapColabAutoReconnectInstalled) return;
+            window.__websnapColabAutoReconnectInstalled = true;
+
+            var COOLDOWN_MS = 10000;
+            var lastClickTime = 0;
+
+            function now() { return Date.now ? Date.now() : (new Date()).getTime(); }
+
+            function safeGetAttr(el, name) {
+              try { return (el && el.getAttribute) ? (el.getAttribute(name) || '') : ''; } catch (e) { return ''; }
+            }
+
+            function getLabel(el) {
               try {
-                if (window.__websnapColabAutoReconnectInstalled) return;
-                window.__websnapColabAutoReconnectInstalled = true;
-
-                var COOLDOWN_MS = 10000;
-                var lastClickTime = 0;
-
-                function now() { return Date.now ? Date.now() : (new Date()).getTime(); }
-
-                function isVisible(el) {
-                  if (!el) return false;
-                  try {
-                    var rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
-                    if (!rect) return true;
-                    if (rect.width <= 0 || rect.height <= 0) return false;
-                    var style = window.getComputedStyle ? window.getComputedStyle(el) : null;
-                    if (style) {
-                      if (style.display === 'none') return false;
-                      if (style.visibility === 'hidden') return false;
-                      if (style.opacity === '0') return false;
-                    }
-                    return true;
-                  } catch (e) {
-                    return true;
-                  }
-                }
-
-                function isClickable(el) {
-                  if (!el) return false;
-                  var tag = (el.tagName || '').toLowerCase();
-                  if (tag === 'button' || tag === 'a') return true;
-                  try {
-                    var role = el.getAttribute && el.getAttribute('role');
-                    if (role && role.toLowerCase() === 'button') return true;
-                  } catch (e) {}
-                  return typeof el.click === 'function';
-                }
-
-                function textMatches(el) {
-                  try {
-                    var text = (el.innerText || el.textContent || '').trim();
-                    if (!text) return false;
-                    var lower = text.toLowerCase();
-                    // 中文 / 英文固定文案匹配
-                    if (text.indexOf('重新连接') !== -1) return true;
-                    if (lower.indexOf('reconnect') !== -1) return true;
-                    return false;
-                  } catch (e) {
-                    return false;
-                  }
-                }
-
-                function tryClickInRoot(root) {
-                  if (!root) return false;
-                  var t = now();
-                  if (t - lastClickTime < COOLDOWN_MS) return false;
-
-                  try {
-                    var selector = "button,[role='button'],a,div,span";
-                    var nodes = root.querySelectorAll ? root.querySelectorAll(selector) : [];
-                    for (var i = 0; i < nodes.length; i++) {
-                      var el = nodes[i];
-                      if (!isClickable(el)) continue;
-                      if (!isVisible(el)) continue;
-                      if (!textMatches(el)) continue;
-
-                      lastClickTime = now();
-                      el.click();
-                      return true;
-                    }
-                  } catch (e) {}
-                  return false;
-                }
-
-                function walkShadowRootsAndClick(root) {
-                  // 先尝试当前 root
-                  if (tryClickInRoot(root)) return true;
-
-                  // 再遍历所有元素的 shadowRoot
-                  try {
-                    var walker = document.createTreeWalker(
-                      root,
-                      NodeFilter.SHOW_ELEMENT,
-                      null
-                    );
-                    var node = root;
-                    while (node) {
-                      if (node.shadowRoot) {
-                        if (walkShadowRootsAndClick(node.shadowRoot)) return true;
-                      }
-                      node = walker.nextNode();
-                    }
-                  } catch (e) {}
-
-                  return false;
-                }
-
-                function attempt() {
-                  try {
-                    return walkShadowRootsAndClick(document);
-                  } catch (e) {
-                    return false;
-                  }
-                }
-
-                // 监听 DOM 变化：弹窗出现时更快响应
-                try {
-                  var observer = new MutationObserver(function () {
-                    attempt();
-                  });
-                  observer.observe(document.documentElement, { childList: true, subtree: true });
-                } catch (e) {}
-
-                // 定时兜底：防 observer 漏掉
-                try {
-                  setInterval(attempt, 4000);
-                  setTimeout(attempt, 1200);
-                } catch (e) {}
-
+                var t = (el.innerText || el.textContent || '').trim();
+                if (t) return t;
+                var aria = safeGetAttr(el, 'aria-label').trim();
+                if (aria) return aria;
+                var title = safeGetAttr(el, 'title').trim();
+                if (title) return title;
+                return '';
               } catch (e) {
-                // ignore
+                return '';
               }
-            })();
-        """.trimIndent()
+            }
 
+            function isVisible(el) {
+              if (!el) return false;
+              try {
+                var rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+                if (rect && (rect.width <= 0 || rect.height <= 0)) return false;
+                var style = window.getComputedStyle ? window.getComputedStyle(el) : null;
+                if (style) {
+                  if (style.display === 'none') return false;
+                  if (style.visibility === 'hidden') return false;
+                  if (style.opacity === '0') return false;
+                }
+                return true;
+              } catch (e) {
+                return true;
+              }
+            }
+
+            function isClickable(el) {
+              if (!el) return false;
+              var tag = (el.tagName || '').toLowerCase();
+              if (tag === 'button' || tag === 'a') return true;
+              try {
+                var role = safeGetAttr(el, 'role');
+                if (role && role.toLowerCase() === 'button') return true;
+              } catch (e) {}
+              return typeof el.click === 'function';
+            }
+
+            function matchReconnectText(text) {
+              if (!text) return false;
+              var t = text.trim();
+              var lower = t.toLowerCase();
+              if (t.indexOf('重新连接') !== -1) return true;
+              if (lower.indexOf('reconnect') !== -1) return true;
+              return false;
+            }
+
+            function matchDisconnectedText(text) {
+              if (!text) return false;
+              var t = text.trim();
+              var lower = t.toLowerCase();
+              if (t.indexOf('断开连接') !== -1) return true;
+              if (lower.indexOf('disconnected') !== -1) return true;
+              return false;
+            }
+
+            function clickBestTarget(el) {
+              if (!el) return false;
+
+              // 往上找更“像按钮”的祖先，避免点到纯文本节点
+              var cur = el;
+              for (var i = 0; i < 5 && cur; i++) {
+                if (isClickable(cur)) {
+                  try {
+                    if (cur.scrollIntoView) cur.scrollIntoView({block:'center', inline:'center'});
+                  } catch (e) {}
+                  try { cur.click(); return true; } catch (e) {}
+                }
+                cur = cur.parentElement;
+              }
+
+              try { el.click(); return true; } catch (e) {}
+              return false;
+            }
+
+            function tryClickInRoot(root) {
+              var t = now();
+              if (t - lastClickTime < COOLDOWN_MS) return false;
+
+              try {
+                var selector = "button,[role='button'],a,div,span";
+                var nodes = root.querySelectorAll ? root.querySelectorAll(selector) : [];
+                for (var i = 0; i < nodes.length; i++) {
+                  var el = nodes[i];
+                  if (!isVisible(el)) continue;
+
+                  var label = getLabel(el);
+                  if (!matchReconnectText(label)) continue;
+
+                  // 找到“重新连接”后再判断它附近是否真的在“断开连接”弹窗里（减少误点）
+                  // 方式：向上看几层父元素文本是否包含“断开连接/disconnected”
+                  var p = el;
+                  var okContext = false;
+                  for (var k = 0; k < 6 && p; k++) {
+                    var ctxText = getLabel(p);
+                    if (matchDisconnectedText(ctxText)) { okContext = true; break; }
+                    // 也允许 role=dialog/aria-modal 的容器
+                    var role = safeGetAttr(p, 'role');
+                    var ariaModal = safeGetAttr(p, 'aria-modal');
+                    if ((role && role.toLowerCase() === 'dialog') || (ariaModal && ariaModal.toLowerCase() === 'true')) {
+                      // 如果在 dialog 内部看到 reconnect，也认为可信
+                      okContext = true;
+                      break;
+                    }
+                    p = p.parentElement;
+                  }
+
+                  // 如果没找到上下文，也仍然允许点击（有些 Colab 样式不含“断开连接”文字在父级）
+                  // 但优先点击上下文明确的
+                  if (okContext || true) {
+                    lastClickTime = now();
+                    return clickBestTarget(el);
+                  }
+                }
+              } catch (e) {}
+              return false;
+            }
+
+            function walkShadowRootsAndClick(docOrRoot) {
+              if (!docOrRoot) return false;
+
+              // 先试当前 root
+              if (tryClickInRoot(docOrRoot)) return true;
+
+              // 遍历 shadowRoot
+              try {
+                var rootNode = docOrRoot;
+                var walkerRoot = (docOrRoot.nodeType === 9 && docOrRoot.documentElement) ? docOrRoot.documentElement : docOrRoot;
+                if (!walkerRoot) return false;
+
+                var walker = document.createTreeWalker(walkerRoot, NodeFilter.SHOW_ELEMENT, null);
+                var node = walkerRoot;
+
+                while (node) {
+                  if (node.shadowRoot) {
+                    if (walkShadowRootsAndClick(node.shadowRoot)) return true;
+                  }
+                  node = walker.nextNode();
+                }
+              } catch (e) {}
+
+              return false;
+            }
+
+            function getSameOriginIframesDocs() {
+              var docs = [];
+              try {
+                var iframes = document.querySelectorAll('iframe');
+                for (var i = 0; i < iframes.length; i++) {
+                  var f = iframes[i];
+                  try {
+                    var d = f.contentDocument;
+                    if (d) docs.push(d);
+                  } catch (e) {
+                    // cross-origin iframe，忽略
+                  }
+                }
+              } catch (e) {}
+              return docs;
+            }
+
+            function attempt() {
+              try {
+                // 先在主文档尝试
+                if (walkShadowRootsAndClick(document)) return true;
+
+                // 再尝试同源 iframe
+                var docs = getSameOriginIframesDocs();
+                for (var i = 0; i < docs.length; i++) {
+                  if (walkShadowRootsAndClick(docs[i])) return true;
+                }
+              } catch (e) {}
+              return false;
+            }
+
+            // MutationObserver：弹窗出现时快速响应
+            try {
+              var observer = new MutationObserver(function () {
+                attempt();
+              });
+              observer.observe(document.documentElement, { childList: true, subtree: true });
+            } catch (e) {}
+
+            // 定时兜底
+            try {
+              setInterval(attempt, 2500);
+              setTimeout(attempt, 800);
+              setTimeout(attempt, 3000);
+            } catch (e) {}
+
+          } catch (e) {
+            // ignore
+          }
+        })();
+    """.trimIndent()
+
+                
     private fun getSettingsPrefs() =
         getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
 
