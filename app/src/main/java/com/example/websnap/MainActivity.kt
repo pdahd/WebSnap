@@ -16,12 +16,15 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -63,8 +66,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
     private val desktopUserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-        "AppleWebKit/537.36 (KHTML, like Gecko) " +
-        "Chrome/120.0.0.0 Safari/537.36"
+            "AppleWebKit/537.36 (KHTML, like Gecko) " +
+            "Chrome/120.0.0.0 Safari/537.36"
 
     private val webViewSchemes = setOf("http", "https", "about", "data", "javascript", "file")
     private val systemSchemes = setOf("tel", "mailto", "sms")
@@ -124,235 +127,301 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         """.trimIndent()
 
     // ═══════════════════════════════════════════════════════════════
-    // Colab 自动重连（可选开关）
+    // Colab 自动重连（可选开关）- 真实触摸方案
     // ═══════════════════════════════════════════════════════════════
 
     /**
-     * Colab 自动点击“重新连接 / Reconnect”的脚本（仅在 Colab 域名 + 开关开启时注入）
+     * 说明：
+     * - 之前纯 JS element.click() 在 Colab 上无效（很可能是 isTrusted 限制）
+     * - 这版策略：JS 负责定位“重新连接/连接”元素的屏幕位置 → 调用 Android Bridge → WebView 派发真实触摸事件
      *
-     * 设计目标：
-     * - 幂等：重复注入不会创建多个定时器（用 window.__websnapColabAutoReconnectInstalled guard）
-     * - 稳定：MutationObserver + setInterval 双保险
-     * - 安全：节流冷却，避免疯狂连点
-     * - 兼容：尽量遍历 shadowRoot（Colab 可能使用 Web Components）
+     * 覆盖两种断线表现：
+     * 1) 弹窗里“重新连接”
+     * 2) 右上角“连接/重新连接”（无弹窗）
      */
     private val colabAutoReconnectScript: String
-    get() = """
-        (function () {
-          try {
-            if (window.__websnapColabAutoReconnectInstalled) return;
-            window.__websnapColabAutoReconnectInstalled = true;
-
-            var COOLDOWN_MS = 10000;
-            var lastClickTime = 0;
-
-            function now() { return Date.now ? Date.now() : (new Date()).getTime(); }
-
-            function safeGetAttr(el, name) {
-              try { return (el && el.getAttribute) ? (el.getAttribute(name) || '') : ''; } catch (e) { return ''; }
-            }
-
-            function getLabel(el) {
+        get() = """
+            (function () {
               try {
-                var t = (el.innerText || el.textContent || '').trim();
-                if (t) return t;
-                var aria = safeGetAttr(el, 'aria-label').trim();
-                if (aria) return aria;
-                var title = safeGetAttr(el, 'title').trim();
-                if (title) return title;
-                return '';
-              } catch (e) {
-                return '';
-              }
-            }
+                if (window.__websnapColabAutoReconnectInstalled) return;
+                window.__websnapColabAutoReconnectInstalled = true;
 
-            function isVisible(el) {
-              if (!el) return false;
-              try {
-                var rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
-                if (rect && (rect.width <= 0 || rect.height <= 0)) return false;
-                var style = window.getComputedStyle ? window.getComputedStyle(el) : null;
-                if (style) {
-                  if (style.display === 'none') return false;
-                  if (style.visibility === 'hidden') return false;
-                  if (style.opacity === '0') return false;
-                }
-                return true;
-              } catch (e) {
-                return true;
-              }
-            }
+                var COOLDOWN_MS = 8000;
+                var lastCall = 0;
 
-            function isClickable(el) {
-              if (!el) return false;
-              var tag = (el.tagName || '').toLowerCase();
-              if (tag === 'button' || tag === 'a') return true;
-              try {
-                var role = safeGetAttr(el, 'role');
-                if (role && role.toLowerCase() === 'button') return true;
-              } catch (e) {}
-              return typeof el.click === 'function';
-            }
+                function now() { return Date.now ? Date.now() : (new Date()).getTime(); }
 
-            function matchReconnectText(text) {
-              if (!text) return false;
-              var t = text.trim();
-              var lower = t.toLowerCase();
-              if (t.indexOf('重新连接') !== -1) return true;
-              if (lower.indexOf('reconnect') !== -1) return true;
-              return false;
-            }
-
-            function matchDisconnectedText(text) {
-              if (!text) return false;
-              var t = text.trim();
-              var lower = t.toLowerCase();
-              if (t.indexOf('断开连接') !== -1) return true;
-              if (lower.indexOf('disconnected') !== -1) return true;
-              return false;
-            }
-
-            function clickBestTarget(el) {
-              if (!el) return false;
-
-              // 往上找更“像按钮”的祖先，避免点到纯文本节点
-              var cur = el;
-              for (var i = 0; i < 5 && cur; i++) {
-                if (isClickable(cur)) {
+                function safeAttr(el, name) {
                   try {
-                    if (cur.scrollIntoView) cur.scrollIntoView({block:'center', inline:'center'});
-                  } catch (e) {}
-                  try { cur.click(); return true; } catch (e) {}
-                }
-                cur = cur.parentElement;
-              }
-
-              try { el.click(); return true; } catch (e) {}
-              return false;
-            }
-
-            function tryClickInRoot(root) {
-              var t = now();
-              if (t - lastClickTime < COOLDOWN_MS) return false;
-
-              try {
-                var selector = "button,[role='button'],a,div,span";
-                var nodes = root.querySelectorAll ? root.querySelectorAll(selector) : [];
-                for (var i = 0; i < nodes.length; i++) {
-                  var el = nodes[i];
-                  if (!isVisible(el)) continue;
-
-                  var label = getLabel(el);
-                  if (!matchReconnectText(label)) continue;
-
-                  // 找到“重新连接”后再判断它附近是否真的在“断开连接”弹窗里（减少误点）
-                  // 方式：向上看几层父元素文本是否包含“断开连接/disconnected”
-                  var p = el;
-                  var okContext = false;
-                  for (var k = 0; k < 6 && p; k++) {
-                    var ctxText = getLabel(p);
-                    if (matchDisconnectedText(ctxText)) { okContext = true; break; }
-                    // 也允许 role=dialog/aria-modal 的容器
-                    var role = safeGetAttr(p, 'role');
-                    var ariaModal = safeGetAttr(p, 'aria-modal');
-                    if ((role && role.toLowerCase() === 'dialog') || (ariaModal && ariaModal.toLowerCase() === 'true')) {
-                      // 如果在 dialog 内部看到 reconnect，也认为可信
-                      okContext = true;
-                      break;
-                    }
-                    p = p.parentElement;
-                  }
-
-                  // 如果没找到上下文，也仍然允许点击（有些 Colab 样式不含“断开连接”文字在父级）
-                  // 但优先点击上下文明确的
-                  if (okContext || true) {
-                    lastClickTime = now();
-                    return clickBestTarget(el);
-                  }
-                }
-              } catch (e) {}
-              return false;
-            }
-
-            function walkShadowRootsAndClick(docOrRoot) {
-              if (!docOrRoot) return false;
-
-              // 先试当前 root
-              if (tryClickInRoot(docOrRoot)) return true;
-
-              // 遍历 shadowRoot
-              try {
-                var rootNode = docOrRoot;
-                var walkerRoot = (docOrRoot.nodeType === 9 && docOrRoot.documentElement) ? docOrRoot.documentElement : docOrRoot;
-                if (!walkerRoot) return false;
-
-                var walker = document.createTreeWalker(walkerRoot, NodeFilter.SHOW_ELEMENT, null);
-                var node = walkerRoot;
-
-                while (node) {
-                  if (node.shadowRoot) {
-                    if (walkShadowRootsAndClick(node.shadowRoot)) return true;
-                  }
-                  node = walker.nextNode();
-                }
-              } catch (e) {}
-
-              return false;
-            }
-
-            function getSameOriginIframesDocs() {
-              var docs = [];
-              try {
-                var iframes = document.querySelectorAll('iframe');
-                for (var i = 0; i < iframes.length; i++) {
-                  var f = iframes[i];
-                  try {
-                    var d = f.contentDocument;
-                    if (d) docs.push(d);
+                    return (el && el.getAttribute) ? (el.getAttribute(name) || '') : '';
                   } catch (e) {
-                    // cross-origin iframe，忽略
+                    return '';
                   }
                 }
-              } catch (e) {}
-              return docs;
-            }
 
-            function attempt() {
-              try {
-                // 先在主文档尝试
-                if (walkShadowRootsAndClick(document)) return true;
-
-                // 再尝试同源 iframe
-                var docs = getSameOriginIframesDocs();
-                for (var i = 0; i < docs.length; i++) {
-                  if (walkShadowRootsAndClick(docs[i])) return true;
+                function getText(el) {
+                  try {
+                    var t = (el.innerText || el.textContent || '').trim();
+                    if (t) return t;
+                    var aria = String(safeAttr(el, 'aria-label') || '').trim();
+                    if (aria) return aria;
+                    var title = String(safeAttr(el, 'title') || '').trim();
+                    if (title) return title;
+                    return '';
+                  } catch (e) {
+                    return '';
+                  }
                 }
-              } catch (e) {}
-              return false;
+
+                function isVisible(el) {
+                  if (!el || !el.getBoundingClientRect) return false;
+                  try {
+                    var r = el.getBoundingClientRect();
+                    return r.width > 0 && r.height > 0;
+                  } catch (e) {
+                    return false;
+                  }
+                }
+
+                function isClickable(el) {
+                  if (!el) return false;
+                  var tag = (el.tagName || '').toLowerCase();
+                  if (tag === 'button' || tag === 'a') return true;
+                  var role = String(safeAttr(el, 'role') || '').toLowerCase();
+                  if (role === 'button') return true;
+                  return typeof el.click === 'function';
+                }
+
+                function matchReconnect(text) {
+                  if (!text) return false;
+                  var t = text.trim();
+                  var lower = t.toLowerCase();
+                  if (t.indexOf('重新连接') !== -1) return true;
+                  if (lower.indexOf('reconnect') !== -1) return true;
+                  return false;
+                }
+
+                function matchConnect(text) {
+                  if (!text) return false;
+                  var t = text.trim();
+                  var lower = t.toLowerCase();
+                  // 右上角断线状态可能显示“连接”或“重新连接”
+                  if (t === '连接') return true;
+                  if (t.indexOf('重新连接') !== -1) return true;
+                  if (lower === 'connect') return true;
+                  if (lower.indexOf('reconnect') !== -1) return true;
+                  return false;
+                }
+
+                function matchDisconnectedContext(text) {
+                  if (!text) return false;
+                  var t = text.trim();
+                  var lower = t.toLowerCase();
+                  if (t.indexOf('代码执行程序已断开连接') !== -1) return true;
+                  if (t.indexOf('断开连接') !== -1) return true;
+                  if (lower.indexOf('disconnected') !== -1) return true;
+                  return false;
+                }
+
+                function viewportSize() {
+                  try {
+                    if (window.visualViewport) {
+                      return { w: window.visualViewport.width, h: window.visualViewport.height };
+                    }
+                  } catch (e) {}
+                  var w = document.documentElement ? document.documentElement.clientWidth : window.innerWidth;
+                  var h = document.documentElement ? document.documentElement.clientHeight : window.innerHeight;
+                  return { w: w, h: h };
+                }
+
+                function callBridgeAt(el) {
+                  if (!el || !el.getBoundingClientRect) return false;
+
+                  var vp = viewportSize();
+                  if (!vp || !vp.w || !vp.h) return false;
+
+                  var r = el.getBoundingClientRect();
+                  var cx = r.left + r.width / 2;
+                  var cy = r.top + r.height / 2;
+
+                  // 转为视口比例，交给 Android 侧映射到 WebView 像素坐标
+                  var xr = cx / vp.w;
+                  var yr = cy / vp.h;
+
+                  try {
+                    if (window.WebSnapColabBridge && window.WebSnapColabBridge.tapAtRatio) {
+                      window.WebSnapColabBridge.tapAtRatio(xr, yr);
+                      return true;
+                    }
+                  } catch (e) {}
+
+                  return false;
+                }
+
+                function findReconnectInDialog() {
+                  // 找弹窗里的“重新连接”
+                  var nodes = document.querySelectorAll("button,[role='button'],a,div,span");
+                  for (var i = 0; i < nodes.length; i++) {
+                    var el = nodes[i];
+                    if (!isVisible(el)) continue;
+                    if (!isClickable(el)) continue;
+
+                    var label = getText(el);
+                    if (!matchReconnect(label)) continue;
+
+                    // 上溯判断是否处于“断开连接”弹窗上下文
+                    var p = el;
+                    var ok = false;
+                    for (var k = 0; k < 10 && p; k++) {
+                      var ctx = getText(p);
+                      if (matchDisconnectedContext(ctx)) { ok = true; break; }
+
+                      var role = String(safeAttr(p, 'role') || '').toLowerCase();
+                      var ariaModal = String(safeAttr(p, 'aria-modal') || '').toLowerCase();
+                      if (role === 'dialog' || ariaModal === 'true') { ok = true; break; }
+
+                      p = p.parentElement;
+                    }
+
+                    if (ok) return el;
+                  }
+                  return null;
+                }
+
+                function findTopRightConnect() {
+                  // 找右上角“连接/重新连接”
+                  var vp = viewportSize();
+                  if (!vp || !vp.w || !vp.h) return null;
+
+                  var nodes = document.querySelectorAll("button,[role='button'],a,div,span");
+                  var best = null;
+                  var bestScore = -1;
+
+                  for (var i = 0; i < nodes.length; i++) {
+                    var el = nodes[i];
+                    if (!isVisible(el)) continue;
+                    if (!isClickable(el)) continue;
+
+                    var label = getText(el);
+                    if (!matchConnect(label)) continue;
+
+                    var r = el.getBoundingClientRect();
+                    // 几何约束：靠右、靠上（避免正文里出现“连接”字样误点）
+                    if (r.right < vp.w * 0.60) continue;
+                    if (r.top > vp.h * 0.30) continue;
+
+                    // 评分：越靠右上越优先
+                    var score = (r.right / vp.w) + (1 - (r.top / vp.h));
+                    if (score > bestScore) {
+                      bestScore = score;
+                      best = el;
+                    }
+                  }
+
+                  return best;
+                }
+
+                function attempt() {
+                  var t = now();
+                  if (t - lastCall < COOLDOWN_MS) return;
+                  lastCall = t;
+
+                  // 优先处理弹窗重连
+                  var reconnectBtn = findReconnectInDialog();
+                  if (reconnectBtn) {
+                    try { if (reconnectBtn.scrollIntoView) reconnectBtn.scrollIntoView({block:'center', inline:'center'}); } catch (e) {}
+                    callBridgeAt(reconnectBtn);
+                    return;
+                  }
+
+                  // 无弹窗时，处理右上角“连接/重新连接”
+                  var connectBtn = findTopRightConnect();
+                  if (connectBtn) {
+                    try { if (connectBtn.scrollIntoView) connectBtn.scrollIntoView({block:'center', inline:'center'}); } catch (e) {}
+                    callBridgeAt(connectBtn);
+                    return;
+                  }
+                }
+
+                // DOM 变化时尝试一次
+                try {
+                  var observer = new MutationObserver(function () { attempt(); });
+                  observer.observe(document.documentElement, { childList: true, subtree: true });
+                } catch (e) {}
+
+                // 定时兜底
+                try {
+                  setInterval(attempt, 2500);
+                  setTimeout(attempt, 800);
+                  setTimeout(attempt, 3500);
+                } catch (e) {}
+
+              } catch (e) {
+                // ignore
+              }
+            })();
+        """.trimIndent()
+
+    @Volatile
+    private var lastAutoTapUptimeMs: Long = 0L
+
+    private inner class ColabAutoReconnectBridge {
+
+        @JavascriptInterface
+        fun tapAtRatio(xRatio: Double, yRatio: Double) {
+            runOnUiThread {
+                // 双重保护：只有开关开启 + colab 域名时才允许触发真实触摸
+                if (!shouldInjectColabAutoReconnect(binding.webView.url)) return@runOnUiThread
+
+                val now = SystemClock.uptimeMillis()
+                if (now - lastAutoTapUptimeMs < 7000L) return@runOnUiThread
+                lastAutoTapUptimeMs = now
+
+                val w = binding.webView.width
+                val h = binding.webView.height
+                if (w <= 0 || h <= 0) return@runOnUiThread
+
+                val xr = xRatio.toFloat().coerceIn(0.05f, 0.95f)
+                val yr = yRatio.toFloat().coerceIn(0.05f, 0.95f)
+
+                val x = xr * w
+                val y = yr * h
+
+                performTapOnWebView(x, y)
             }
+        }
+    }
 
-            // MutationObserver：弹窗出现时快速响应
-            try {
-              var observer = new MutationObserver(function () {
-                attempt();
-              });
-              observer.observe(document.documentElement, { childList: true, subtree: true });
-            } catch (e) {}
+    private fun performTapOnWebView(x: Float, y: Float) {
+        val webView = binding.webView
 
-            // 定时兜底
-            try {
-              setInterval(attempt, 2500);
-              setTimeout(attempt, 800);
-              setTimeout(attempt, 3000);
-            } catch (e) {}
+        val downTime = SystemClock.uptimeMillis()
+        val downEvent = MotionEvent.obtain(
+            downTime,
+            downTime,
+            MotionEvent.ACTION_DOWN,
+            x,
+            y,
+            0
+        )
+        webView.dispatchTouchEvent(downEvent)
+        downEvent.recycle()
 
-          } catch (e) {
-            // ignore
-          }
-        })();
-    """.trimIndent()
+        webView.postDelayed({
+            val upTime = SystemClock.uptimeMillis()
+            val upEvent = MotionEvent.obtain(
+                downTime,
+                upTime,
+                MotionEvent.ACTION_UP,
+                x,
+                y,
+                0
+            )
+            webView.dispatchTouchEvent(upEvent)
+            upEvent.recycle()
+        }, 60)
+    }
 
-                
     private fun getSettingsPrefs() =
         getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
 
@@ -362,7 +431,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
         return try {
             val host = Uri.parse(url).host ?: return false
-            host.equals("colab.research.google.com", ignoreCase = true)
+            host.equals("colab.research.google.com", ignoreCase = true) ||
+                host.equals("lab.research.google.com", ignoreCase = true)
         } catch (_: Exception) {
             false
         }
@@ -383,7 +453,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         // evaluateJavascript 可重复调用：脚本内部有 guard，不会重复安装
         view.evaluateJavascript(colabAutoReconnectScript, null)
     }
-    
+
     // ═══════════════════════════════════════════════════════════════
     // 权限请求码
     // ═══════════════════════════════════════════════════════════════
@@ -660,6 +730,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             mobileUserAgent = settings.userAgentString
             webViewClient = createWebViewClient()
             webChromeClient = createWebChromeClient()
+
+            // Colab 自动重连：注册 JS Bridge（JS 会回调触发真实触摸点击）
+            addJavascriptInterface(ColabAutoReconnectBridge(), "WebSnapColabBridge")
         }
 
         val cookieManager = CookieManager.getInstance()
@@ -715,7 +788,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 }
             }
 
-            override fun onReceivedError(
+            // ===== MainActivity.kt part1 结束；请将 part2 粘贴到下一行继续（不要另起文件）=====
+                        override fun onReceivedError(
                 view: WebView?,
                 request: WebResourceRequest?,
                 error: WebResourceError?
@@ -1013,7 +1087,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
         val isBookmarked = if (!currentUrl.isNullOrBlank()
             && currentUrl != "about:blank"
-            && !currentUrl.startsWith("file:")) {
+            && !currentUrl.startsWith("file:")
+        ) {
             bookmarkManager.contains(currentUrl)
         } else {
             false
@@ -1031,7 +1106,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
         if (currentUrl.isNullOrBlank()
             || currentUrl == "about:blank"
-            || currentUrl.startsWith("file:")) {
+            || currentUrl.startsWith("file:")
+        ) {
             showToast(getString(R.string.toast_bookmark_need_page))
             return
         }
@@ -1122,11 +1198,13 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         val currentUrl = binding.webView.url
         if (!currentUrl.isNullOrBlank()
             && currentUrl != "about:blank"
-            && !currentUrl.startsWith("file:")) {
+            && !currentUrl.startsWith("file:")
+        ) {
             binding.webView.reload()
         }
     }
 
+    // ===== MainActivity.kt part2 结束；请将 part3 粘贴到下一行继续（不要另起文件）=====
     // ═══════════════════════════════════════════════════════════════
     // 刷新功能
     // ═══════════════════════════════════════════════════════════════
@@ -1180,6 +1258,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         val bottomSheet = BottomSheetDialog(this, R.style.Theme_WebSnap_BottomSheet)
         val sheetBinding = BottomSheetRefreshBinding.inflate(layoutInflater)
         bottomSheet.setContentView(sheetBinding.root)
+
         // ─────────────────────────────────────────────
         // Colab 自动重连开关（默认关闭）
         // ─────────────────────────────────────────────
@@ -1497,7 +1576,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         formatSeconds(remainingSeconds)
                     )
                 }
-                is RefreshTask.Scheduled -> {}
+                is RefreshTask.Scheduled -> {
+                    // 定时模式按钮显示目标时间，不需要每秒变
+                }
                 null -> {}
             }
         }
@@ -1551,12 +1632,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
      */
     private fun getEffectiveScale(): Float {
         return if (isPcMode) {
-            // PC 模式：viewport 宽度是 desktopViewportWidth (1024)
-            // 实际显示宽度是 webView.width
-            // 真正的缩放比例 = 实际宽度 / 虚拟视口宽度
             binding.webView.width.toFloat() / desktopViewportWidth.toFloat()
         } else {
-            // 普通模式：直接使用 WebView 报告的缩放比例
             @Suppress("DEPRECATION")
             binding.webView.scale
         }
@@ -1585,11 +1662,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             } catch (e: OutOfMemoryError) {
                 showToast(getString(R.string.toast_memory_insufficient))
                 System.gc()
-
             } catch (e: Exception) {
                 showToast(getString(R.string.toast_capture_failed))
                 e.printStackTrace()
-
             } finally {
                 binding.buttonCapture.isEnabled = true
             }
@@ -1619,11 +1694,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             } catch (e: OutOfMemoryError) {
                 showToast(getString(R.string.toast_memory_insufficient))
                 System.gc()
-
             } catch (e: Exception) {
                 showToast(getString(R.string.toast_capture_failed))
                 e.printStackTrace()
-
             } finally {
                 binding.buttonCapture.isEnabled = true
             }
@@ -1650,7 +1723,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     private fun captureFullPageBitmap(): Bitmap? {
         val webView = binding.webView
 
-        // ★ 关键修复：使用正确的缩放比例
         val scale = getEffectiveScale()
         val contentWidth = webView.width
         var contentHeight = (webView.contentHeight * scale).toInt()
