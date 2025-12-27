@@ -183,6 +183,38 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
+    <!-- Colab 自动重连开关 -->
+    <LinearLayout
+        android:id="@+id/containerColabAutoReconnect"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:layout_marginHorizontal="20dp"
+        android:orientation="vertical"
+        app:layout_constraintTop_toBottomOf="@id/divider2"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switchColabAutoReconnect"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/refresh_colab_auto_reconnect"
+            android:textColor="#000000"
+            android:textSize="15sp"
+            android:checked="false" />
+
+        <TextView
+            android:id="@+id/textViewColabAutoReconnectHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/refresh_colab_auto_reconnect_hint"
+            android:textColor="#666666"
+            android:textSize="12sp" />
+
+    </LinearLayout>
+
     <!-- 当前任务状态 -->
     <LinearLayout
         android:id="@+id/containerCurrentTask"
@@ -195,7 +227,7 @@
         android:padding="14dp"
         android:background="@drawable/current_task_background"
         android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@id/divider2"
+        app:layout_constraintTop_toBottomOf="@id/containerColabAutoReconnect"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         tools:visibility="visible">
