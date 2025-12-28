@@ -124,86 +124,178 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         """.trimIndent()
 
     // ═══════════════════════════════════════════════════════════════
-    // Colab 自动重连（可选开关）- 纯 JS click（穿透 shadow DOM）
+    // Colab 自动重连（可选开关）- 双通道：先弹窗后右上角
     // ═══════════════════════════════════════════════════════════════
 
     /**
-     * 说明：
-     * - Kiwi DevTools 已验证：通过 colab-connect-button → shadowRoot → colab-toolbar-button#connect → md-text-button#button click()
-     *   可以触发连接/重新连接（无需 Android 侧模拟触摸）
-     * - 核心判断依据：toolbar 的 tooltiptext
-     *   - 断线时：tooltiptext = “点击即可连接”
-     *   - 已连接时：tooltiptext 以“已连接 ...”开头，并包含 RAM/磁盘等信息
+     * 设计逻辑（已通过 Kiwi DevTools 验证）：
+     * 1) 若出现“代码执行程序已断开连接”弹窗：
+     *    - 弹窗“重新连接”按钮是 md-text-button（slot="primaryAction", dialogaction="ok"）
+     *    - 直接 click() 可触发重连并关闭弹窗
+     * 2) 若无弹窗：
+     *    - 通过 colab-connect-button → shadowRoot → colab-toolbar-button#connect 的 tooltiptext 判断是否“点击即可连接”
+     *    - 然后点击 md-text-button#button 触发连接
+     *
+     * 说明：这个脚本不依赖 Android 模拟触摸，不需要 addJavascriptInterface。
      */
     private val colabAutoReconnectScript: String
         get() = """
             (function () {
               try {
-                if (window.__ws_colab_auto_connect_installed) return;
-                window.__ws_colab_auto_connect_installed = true;
+                // 全局单例控制，便于关闭时清理
+                if (window.__ws_colab_auto_connect && window.__ws_colab_auto_connect.installed) return;
 
-                var lastClick = 0;
+                window.__ws_colab_auto_connect = window.__ws_colab_auto_connect || {};
+                window.__ws_colab_auto_connect.installed = true;
+                window.__ws_colab_auto_connect.lastClick = 0;
 
-                function getParts() {
-                  var host = document.querySelector("colab-connect-button");
-                  var toolbar = (host && host.shadowRoot)
-                    ? host.shadowRoot.querySelector("colab-toolbar-button#connect")
-                    : null;
+                function now() { return Date.now ? Date.now() : (new Date()).getTime(); }
 
-                  var tooltip = (toolbar && toolbar.getAttribute)
-                    ? String(toolbar.getAttribute("tooltiptext") || "").trim()
-                    : "";
-
-                  // 优先点组件层 md-text-button，不行再点内部原生 button
-                  var md = (toolbar && toolbar.shadowRoot)
-                    ? (toolbar.shadowRoot.querySelector("md-text-button#button") || null)
-                    : null;
-
-                  var nativeBtn = (md && md.shadowRoot)
-                    ? (md.shadowRoot.querySelector("button#button") || null)
-                    : null;
-
-                  return { host: host, toolbar: toolbar, md: md, nativeBtn: nativeBtn, tooltip: tooltip };
+                function normText(t) {
+                  try { return String(t || '').replace(/\s+/g, ' ').trim(); } catch (e) { return ''; }
                 }
 
-                function shouldConnect(tooltip) {
+                function matchesReconnectText(t) {
+                  t = normText(t).toLowerCase();
+                  if (!t) return false;
+                  if (t.indexOf('重新连接') !== -1) return true;
+                  if (t.indexOf('reconnect') !== -1) return true;
+                  return false;
+                }
+
+                function findReconnectDialogButton() {
+                  // 最高优先：你抓到的弹窗按钮结构
+                  var list = [];
+                  try {
+                    list = list.concat([].slice.call(
+                      document.querySelectorAll('md-text-button[slot="primaryAction"][dialogaction="ok"]')
+                    ));
+                  } catch (e) {}
+
+                  // 兜底：有些情况下 slot 属性可能不一样，但 dialogaction="ok" 仍然存在
+                  try {
+                    list = list.concat([].slice.call(
+                      document.querySelectorAll('md-text-button[dialogaction="ok"]')
+                    ));
+                  } catch (e) {}
+
+                  for (var i = 0; i < list.length; i++) {
+                    var el = list[i];
+                    var label = normText(el.innerText || el.textContent || '');
+                    if (matchesReconnectText(label)) return el;
+                  }
+
+                  // 再兜底：标准 button/role=button 在 dialog 内部（避免误点页面其它按钮）
+                  try {
+                    var nodes = [].slice.call(document.querySelectorAll('dialog button, dialog [role="button"], [role="dialog"] button, [role="dialog"] [role="button"]'));
+                    for (var j = 0; j < nodes.length; j++) {
+                      var n = nodes[j];
+                      var txt = normText(n.innerText || n.textContent || n.getAttribute && n.getAttribute('aria-label') || '');
+                      if (matchesReconnectText(txt)) return n;
+                    }
+                  } catch (e) {}
+
+                  return null;
+                }
+
+                function getConnectParts() {
+                  var host = null;
+                  var toolbar = null;
+                  var tooltip = '';
+                  var md = null;
+                  var nativeBtn = null;
+
+                  try {
+                    host = document.querySelector('colab-connect-button');
+                    toolbar = (host && host.shadowRoot)
+                      ? host.shadowRoot.querySelector('colab-toolbar-button#connect')
+                      : null;
+
+                    tooltip = (toolbar && toolbar.getAttribute)
+                      ? normText(toolbar.getAttribute('tooltiptext'))
+                      : '';
+
+                    md = (toolbar && toolbar.shadowRoot)
+                      ? (toolbar.shadowRoot.querySelector('md-text-button#button') || null)
+                      : null;
+
+                    nativeBtn = (md && md.shadowRoot)
+                      ? (md.shadowRoot.querySelector('button#button') || null)
+                      : null;
+
+                  } catch (e) {}
+
+                  return { host: host, toolbar: toolbar, tooltip: tooltip, md: md, nativeBtn: nativeBtn };
+                }
+
+                function shouldConnectByTooltip(tooltip) {
                   if (!tooltip) return false;
 
-                  // 已连接/正在连接时不处理
-                  if (tooltip.indexOf("已连接") !== -1) return false;
-                  if (tooltip.indexOf("正在连接") !== -1) return false;
+                  // 已连接/正在连接就不点
+                  if (tooltip.indexOf('已连接') !== -1) return false;
+                  if (tooltip.indexOf('正在连接') !== -1) return false;
 
-                  // 断线态（你抓到的关键文案）
-                  if (/^点击即可/.test(tooltip) && /连接/.test(tooltip)) return true;
+                  // 断线态：点击即可连接
+                  if (/^点击即可/.test(tooltip) && tooltip.indexOf('连接') !== -1) return true;
 
                   // 英文兜底
-                  if (/click to/i.test(tooltip) && /connect/i.test(tooltip)) return true;
+                  var low = tooltip.toLowerCase();
+                  if (low.indexOf('click to') !== -1 && low.indexOf('connect') !== -1) return true;
 
                   return false;
                 }
 
-                function tick() {
-                  var now = Date.now();
-                  if (now - lastClick < 6000) return; // 冷却，避免连点
-
-                  var parts = getParts();
-                  if (!shouldConnect(parts.tooltip)) return;
-
-                  lastClick = now;
-
+                function safeClick(el) {
                   try {
-                    var target = parts.md || parts.nativeBtn;
-                    if (target && target.click) target.click();
+                    if (el && typeof el.click === 'function') {
+                      el.click();
+                      return true;
+                    }
                   } catch (e) {}
+                  return false;
                 }
 
-                setInterval(tick, 2000);
+                function tick() {
+                  var t = now();
+                  if (t - window.__ws_colab_auto_connect.lastClick < 6000) return; // 冷却
+                  
+                  // 1) 先处理弹窗“重新连接”
+                  var dialogBtn = findReconnectDialogButton();
+                  if (dialogBtn) {
+                    window.__ws_colab_auto_connect.lastClick = t;
+                    safeClick(dialogBtn);
+                    return;
+                  }
+
+                  // 2) 再处理右上角总开关
+                  var parts = getConnectParts();
+                  if (!shouldConnectByTooltip(parts.tooltip)) return;
+
+                  window.__ws_colab_auto_connect.lastClick = t;
+                  safeClick(parts.md || parts.nativeBtn);
+                }
+
+                // 保存 timerId，便于关闭开关时清理
+                window.__ws_colab_auto_connect.timerId = setInterval(tick, 2000);
                 setTimeout(tick, 800);
                 tick();
 
               } catch (e) {
                 // ignore
               }
+            })();
+        """.trimIndent()
+
+    private val colabAutoReconnectCleanupScript: String
+        get() = """
+            (function () {
+              try {
+                var s = window.__ws_colab_auto_connect;
+                if (s && s.timerId) {
+                  clearInterval(s.timerId);
+                }
+                try { delete window.__ws_colab_auto_connect; } catch (e) { window.__ws_colab_auto_connect = null; }
+              } catch (e) {}
             })();
         """.trimIndent()
 
@@ -235,6 +327,11 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         if (view == null) return
         if (!shouldInjectColabAutoReconnect(url)) return
         view.evaluateJavascript(colabAutoReconnectScript, null)
+    }
+
+    private fun stopColabAutoReconnectIfRunning(view: WebView?) {
+        if (view == null) return
+        view.evaluateJavascript(colabAutoReconnectCleanupScript, null)
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -390,15 +487,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         when {
-            refreshBottomSheet?.isShowing == true -> {
-                refreshBottomSheet?.dismiss()
-            }
-            bookmarkBottomSheet?.isShowing == true -> {
-                bookmarkBottomSheet?.dismiss()
-            }
-            binding.webView.canGoBack() -> {
-                binding.webView.goBack()
-            }
+            refreshBottomSheet?.isShowing == true -> refreshBottomSheet?.dismiss()
+            bookmarkBottomSheet?.isShowing == true -> bookmarkBottomSheet?.dismiss()
+            binding.webView.canGoBack() -> binding.webView.goBack()
             else -> {
                 @Suppress("DEPRECATION")
                 super.onBackPressed()
@@ -455,7 +546,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             }
 
             fileChooserLauncher.launch(chooserIntent)
-
         } catch (e: Exception) {
             e.printStackTrace()
             fileUploadCallback?.onReceiveValue(null)
@@ -591,7 +681,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         view.evaluateJavascript(desktopModeScript) { _ ->
             if (!desktopModeAppliedForCurrentPage) {
                 desktopModeAppliedForCurrentPage = true
-
                 view.postDelayed({
                     if (isPcMode && isPageLoaded) {
                         view.reload()
@@ -624,7 +713,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             ): Boolean {
                 fileUploadCallback?.onReceiveValue(null)
                 fileUploadCallback = filePathCallback
-
                 launchSystemFilePicker(fileChooserParams)
                 return true
             }
@@ -966,6 +1054,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         // Colab 自动重连开关（默认关闭）
         // ─────────────────────────────────────────────
         sheetBinding.switchColabAutoReconnect.isChecked = isColabAutoReconnectEnabled()
+
         sheetBinding.switchColabAutoReconnect.setOnCheckedChangeListener { _, isChecked ->
             getSettingsPrefs()
                 .edit()
@@ -973,7 +1062,11 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 .apply()
 
             if (isChecked) {
+                // 开启：立即注入一次（若当前是 Colab 页面）
                 maybeInjectColabAutoReconnect(binding.webView, binding.webView.url)
+            } else {
+                // 关闭：清理已注入的定时器/标志，防止脚本残留
+                stopColabAutoReconnectIfRunning(binding.webView)
             }
         }
 
@@ -1004,8 +1097,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             showTimePicker(sheetBinding)
         }
 
-        sheetBinding.radioInterval.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
+        sheetBinding.radioInterval.setOnCheckedChangeListener { _, checked ->
+            if (checked) {
                 sheetBinding.radioScheduled.isChecked = false
                 sheetBinding.containerInterval.alpha = 1f
                 sheetBinding.buttonCustomInterval.alpha = 1f
@@ -1013,8 +1106,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             }
         }
 
-        sheetBinding.radioScheduled.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
+        sheetBinding.radioScheduled.setOnCheckedChangeListener { _, checked ->
+            if (checked) {
                 sheetBinding.radioInterval.isChecked = false
                 sheetBinding.containerInterval.alpha = 0.5f
                 sheetBinding.buttonCustomInterval.alpha = 0.5f
@@ -1081,7 +1174,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                     showToast(getString(R.string.toast_refresh_started))
                     bottomSheet.dismiss()
                 }
-
                 sheetBinding.radioScheduled.isChecked -> {
                     val time = selectedScheduledTime
                     if (time == null) {
@@ -1092,7 +1184,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         bottomSheet.dismiss()
                     }
                 }
-
                 else -> showToast(getString(R.string.toast_refresh_select_mode))
             }
         }
