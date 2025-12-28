@@ -127,22 +127,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
     // Colab 自动重连（可选开关）- 双通道：先弹窗后右上角
     // ═══════════════════════════════════════════════════════════════
 
-    /**
-     * 设计逻辑（已通过 Kiwi DevTools 验证）：
-     * 1) 若出现“代码执行程序已断开连接”弹窗：
-     *    - 弹窗“重新连接”按钮是 md-text-button（slot="primaryAction", dialogaction="ok"）
-     *    - 直接 click() 可触发重连并关闭弹窗
-     * 2) 若无弹窗：
-     *    - 通过 colab-connect-button → shadowRoot → colab-toolbar-button#connect 的 tooltiptext 判断是否“点击即可连接”
-     *    - 然后点击 md-text-button#button 触发连接
-     *
-     * 说明：这个脚本不依赖 Android 模拟触摸，不需要 addJavascriptInterface。
-     */
     private val colabAutoReconnectScript: String
         get() = """
             (function () {
               try {
-                // 全局单例控制，便于关闭时清理
                 if (window.__ws_colab_auto_connect && window.__ws_colab_auto_connect.installed) return;
 
                 window.__ws_colab_auto_connect = window.__ws_colab_auto_connect || {};
@@ -164,7 +152,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 }
 
                 function findReconnectDialogButton() {
-                  // 最高优先：你抓到的弹窗按钮结构
                   var list = [];
                   try {
                     list = list.concat([].slice.call(
@@ -172,7 +159,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                     ));
                   } catch (e) {}
 
-                  // 兜底：有些情况下 slot 属性可能不一样，但 dialogaction="ok" 仍然存在
                   try {
                     list = list.concat([].slice.call(
                       document.querySelectorAll('md-text-button[dialogaction="ok"]')
@@ -185,12 +171,17 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                     if (matchesReconnectText(label)) return el;
                   }
 
-                  // 再兜底：标准 button/role=button 在 dialog 内部（避免误点页面其它按钮）
                   try {
-                    var nodes = [].slice.call(document.querySelectorAll('dialog button, dialog [role="button"], [role="dialog"] button, [role="dialog"] [role="button"]'));
+                    var nodes = [].slice.call(
+                      document.querySelectorAll('dialog button, dialog [role="button"], [role="dialog"] button, [role="dialog"] [role="button"]')
+                    );
                     for (var j = 0; j < nodes.length; j++) {
                       var n = nodes[j];
-                      var txt = normText(n.innerText || n.textContent || n.getAttribute && n.getAttribute('aria-label') || '');
+                      var txt = normText(
+                        (n.innerText || n.textContent || '') ||
+                        (n.getAttribute && n.getAttribute('aria-label')) ||
+                        ''
+                      );
                       if (matchesReconnectText(txt)) return n;
                     }
                   } catch (e) {}
@@ -230,15 +221,11 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
                 function shouldConnectByTooltip(tooltip) {
                   if (!tooltip) return false;
-
-                  // 已连接/正在连接就不点
                   if (tooltip.indexOf('已连接') !== -1) return false;
                   if (tooltip.indexOf('正在连接') !== -1) return false;
 
-                  // 断线态：点击即可连接
                   if (/^点击即可/.test(tooltip) && tooltip.indexOf('连接') !== -1) return true;
 
-                  // 英文兜底
                   var low = tooltip.toLowerCase();
                   if (low.indexOf('click to') !== -1 && low.indexOf('connect') !== -1) return true;
 
@@ -257,9 +244,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
                 function tick() {
                   var t = now();
-                  if (t - window.__ws_colab_auto_connect.lastClick < 6000) return; // 冷却
-                  
-                  // 1) 先处理弹窗“重新连接”
+                  if (t - window.__ws_colab_auto_connect.lastClick < 6000) return;
+
+                  // 1) 先处理弹窗
                   var dialogBtn = findReconnectDialogButton();
                   if (dialogBtn) {
                     window.__ws_colab_auto_connect.lastClick = t;
@@ -275,14 +262,11 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                   safeClick(parts.md || parts.nativeBtn);
                 }
 
-                // 保存 timerId，便于关闭开关时清理
                 window.__ws_colab_auto_connect.timerId = setInterval(tick, 2000);
                 setTimeout(tick, 800);
                 tick();
 
-              } catch (e) {
-                // ignore
-              }
+              } catch (e) {}
             })();
         """.trimIndent()
 
@@ -291,9 +275,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             (function () {
               try {
                 var s = window.__ws_colab_auto_connect;
-                if (s && s.timerId) {
-                  clearInterval(s.timerId);
-                }
+                if (s && s.timerId) clearInterval(s.timerId);
                 try { delete window.__ws_colab_auto_connect; } catch (e) { window.__ws_colab_auto_connect = null; }
               } catch (e) {}
             })();
@@ -363,10 +345,6 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
 
-    /**
-     * 文件选择器启动器
-     * 必须作为类成员变量在 Activity 创建前注册
-     */
     private val fileChooserLauncher: ActivityResultLauncher<Intent> =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             handleFileChooserResult(result.resultCode, result.data)
@@ -1004,10 +982,12 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
 
     private fun performRefresh() {
         val currentUrl = binding.webView.url
+
         if (currentUrl.isNullOrBlank() || currentUrl == "about:blank") {
             showToast(getString(R.string.toast_refresh_need_page))
             return
         }
+
         binding.webView.reload()
     }
 
@@ -1027,6 +1007,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         formatSeconds(remaining)
                     )
                 }
+
                 is RefreshTask.Scheduled -> {
                     val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
                     binding.buttonRefresh.text = getString(
@@ -1034,6 +1015,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         timeFormat.format(Date(task.targetTimeMillis))
                     )
                 }
+
                 null -> {
                     binding.buttonRefresh.isActivated = false
                     binding.buttonRefresh.text = getString(R.string.button_refresh_default)
@@ -1051,9 +1033,35 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         bottomSheet.setContentView(sheetBinding.root)
 
         // ─────────────────────────────────────────────
+        // UI 互斥：Colab 开关开启时，禁用自动刷新任务相关控件
+        // ─────────────────────────────────────────────
+        fun applyColabUiMutex(isColabOn: Boolean) {
+            // 自动刷新相关控件整体禁用/变灰
+            sheetBinding.radioInterval.isEnabled = !isColabOn
+            sheetBinding.radioScheduled.isEnabled = !isColabOn
+            sheetBinding.spinnerInterval.isEnabled = !isColabOn
+            sheetBinding.buttonCustomInterval.isEnabled = !isColabOn
+            sheetBinding.buttonPickTime.isEnabled = !isColabOn
+            sheetBinding.buttonConfirm.isEnabled = !isColabOn
+
+            sheetBinding.containerInterval.alpha = if (isColabOn) 0.45f else 1f
+            sheetBinding.buttonCustomInterval.alpha = if (isColabOn) 0.45f else 1f
+            sheetBinding.containerScheduled.alpha = if (isColabOn) 0.45f else 1f
+            sheetBinding.containerButtons.alpha = if (isColabOn) 0.75f else 1f
+
+            // “取消任务”按钮：如果有任务在跑，仍然允许取消（否则就隐藏）
+            val hasTask = refreshService?.hasActiveTask() == true
+            sheetBinding.buttonCancelTask.isEnabled = hasTask
+            sheetBinding.buttonCancelTask.alpha = if (hasTask) 1f else 0.45f
+        }
+
+        // ─────────────────────────────────────────────
         // Colab 自动重连开关（默认关闭）
         // ─────────────────────────────────────────────
         sheetBinding.switchColabAutoReconnect.isChecked = isColabAutoReconnectEnabled()
+
+        // 初始就应用一次互斥状态
+        applyColabUiMutex(sheetBinding.switchColabAutoReconnect.isChecked)
 
         sheetBinding.switchColabAutoReconnect.setOnCheckedChangeListener { _, isChecked ->
             getSettingsPrefs()
@@ -1062,14 +1070,28 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                 .apply()
 
             if (isChecked) {
-                // 开启：立即注入一次（若当前是 Colab 页面）
+                // 开启 Colab 模式：为了避免干扰 Colab，自动停止正在运行的自动刷新任务
+                if (refreshService?.hasActiveTask() == true) {
+                    refreshService?.stopTask()
+                    stopRefreshService()
+                    showToast("已关闭自动刷新任务，以避免影响 Colab 连接")
+                }
+
+                // 立即注入一次（若当前是 Colab 页面）
                 maybeInjectColabAutoReconnect(binding.webView, binding.webView.url)
+
             } else {
-                // 关闭：清理已注入的定时器/标志，防止脚本残留
+                // 关闭 Colab 模式：清理已注入的定时器/标志，防止脚本残留
                 stopColabAutoReconnectIfRunning(binding.webView)
             }
+
+            // 切换互斥 UI
+            applyColabUiMutex(isChecked)
         }
 
+        // ─────────────────────────────────────────────
+        // 原有自动刷新设置逻辑
+        // ─────────────────────────────────────────────
         val intervalOptions = resources.getStringArray(R.array.interval_options)
         val intervalValues = resources.getIntArray(R.array.interval_values)
         val spinnerAdapter = ArrayAdapter(
@@ -1086,6 +1108,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         customIntervalSeconds = null
 
         sheetBinding.buttonCustomInterval.setOnClickListener {
+            if (!sheetBinding.buttonCustomInterval.isEnabled) return@setOnClickListener
+
             showCustomIntervalDialog { seconds ->
                 customIntervalSeconds = seconds
                 sheetBinding.radioInterval.isChecked = true
@@ -1094,11 +1118,12 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         }
 
         sheetBinding.buttonPickTime.setOnClickListener {
+            if (!sheetBinding.buttonPickTime.isEnabled) return@setOnClickListener
             showTimePicker(sheetBinding)
         }
 
-        sheetBinding.radioInterval.setOnCheckedChangeListener { _, checked ->
-            if (checked) {
+        sheetBinding.radioInterval.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
                 sheetBinding.radioScheduled.isChecked = false
                 sheetBinding.containerInterval.alpha = 1f
                 sheetBinding.buttonCustomInterval.alpha = 1f
@@ -1106,8 +1131,8 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             }
         }
 
-        sheetBinding.radioScheduled.setOnCheckedChangeListener { _, checked ->
-            if (checked) {
+        sheetBinding.radioScheduled.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
                 sheetBinding.radioInterval.isChecked = false
                 sheetBinding.containerInterval.alpha = 0.5f
                 sheetBinding.buttonCustomInterval.alpha = 0.5f
@@ -1116,8 +1141,10 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             }
         }
 
+        // 默认选中间隔刷新
         sheetBinding.radioInterval.isChecked = true
 
+        // 显示当前任务状态
         val service = refreshService
         if (service != null && service.hasActiveTask()) {
             sheetBinding.containerCurrentTask.visibility = View.VISIBLE
@@ -1135,6 +1162,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         formatSeconds(remaining)
                     )
                 }
+
                 is RefreshTask.Scheduled -> {
                     val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
                     sheetBinding.textViewCurrentTask.text = getString(
@@ -1142,6 +1170,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         timeFormat.format(Date(task.targetTimeMillis))
                     )
                 }
+
                 null -> {
                     sheetBinding.containerCurrentTask.visibility = View.GONE
                     sheetBinding.buttonCancelTask.visibility = View.GONE
@@ -1152,6 +1181,9 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
             sheetBinding.buttonCancelTask.visibility = View.GONE
         }
 
+        // 再应用一次互斥：确保“当前任务状态/取消按钮”变化后 UI 一致
+        applyColabUiMutex(sheetBinding.switchColabAutoReconnect.isChecked)
+
         sheetBinding.buttonCancelTask.setOnClickListener {
             refreshService?.stopTask()
             stopRefreshService()
@@ -1160,6 +1192,11 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
         }
 
         sheetBinding.buttonConfirm.setOnClickListener {
+            if (!sheetBinding.buttonConfirm.isEnabled) {
+                showToast("Colab 模式开启中：已禁用自动刷新任务设置")
+                return@setOnClickListener
+            }
+
             when {
                 sheetBinding.radioInterval.isChecked -> {
                     val seconds = customIntervalSeconds
@@ -1174,6 +1211,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                     showToast(getString(R.string.toast_refresh_started))
                     bottomSheet.dismiss()
                 }
+
                 sheetBinding.radioScheduled.isChecked -> {
                     val time = selectedScheduledTime
                     if (time == null) {
@@ -1184,6 +1222,7 @@ class MainActivity : AppCompatActivity(), RefreshService.RefreshCallback {
                         bottomSheet.dismiss()
                     }
                 }
+
                 else -> showToast(getString(R.string.toast_refresh_select_mode))
             }
         }
